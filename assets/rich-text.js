@@ -8,7 +8,8 @@
   function sanitize(html){
     let s=String(html||'').replace(/<!--[\s\S]*?-->/g,'').replace(/<(script|style|iframe|object|embed|textarea|select|svg|math)[^>]*>[\s\S]*?<\/\1>/gi,'');
     s=s.replace(/<\/?([a-zA-Z0-9]+)[^>]*>/g,(m,tag)=>{const t=tag.toLowerCase(),name=ALIAS[t]||t;if(!ALLOWED[name])return '';const close=m.charAt(1)==='/';if(name==='br')return close?'':'<br>';return (close?'</':'<')+name+'>';});
-    return s.replace(/ /g,' ').replace(/(<p>\s*<\/p>)+/g,'').trim();
+    s=s.replace(/\u00a0|&nbsp;/g,' ').replace(/<p>\s*(<(?:h2|h3|blockquote|ul|ol)>)/g,'$1').replace(/(<\/(?:h2|h3|blockquote|ul|ol)>)\s*<\/p>/g,'$1');
+    return s.replace(/(<p>\s*<\/p>)+/g,'').trim();
   }
   const isHtml=v=>/<[a-z]/i.test(String(v||''));
   function text(v){
