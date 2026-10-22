@@ -57,13 +57,19 @@
   /* ---------- rendering ---------- */
   function renderAssignment(){
     head.replaceChildren();form.replaceChildren();Object.keys(editors).forEach(k=>delete editors[k]);
-    head.append(el('p',a.classLabel+' · '+(a.kind==='notebook'?'Notebook':'Homework'),'eyebrow'),el('h1',a.title));
+    head.append(el('p',a.practice?a.classLabel:a.classLabel+' · '+(a.kind==='notebook'?'Notebook':'Homework'),'eyebrow'),el('h1',a.title));
     if(a.intro)head.append(el('p',a.intro,'lead'));
     if(a.instructions&&a.instructions.length){const guide=toggleSection('Instructions','instructions','work-instructions');const ul=el('ul');a.instructions.forEach(t=>ul.append(el('li',t)));guide.append(ul);head.append(guide);}
     if(a.passage){const wrap=toggleSection(a.passage.title,'passage','task-section');const sec=el('section',null,'card passage');if(a.passage.author)sec.append(el('p',a.passage.author,'muted'));
       if(a.passage.lines)a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));sec.append(row);});
       else(a.passage.paragraphs||[]).forEach(t=>sec.append(el('p',t)));wrap.append(sec);form.append(wrap);}
+    // Word help (2026-10-22): one collapsible list; each word opens on its own, so the meaning stays hidden until needed.
+    if(a.wordHelp&&a.wordHelp.length){const wrap=toggleSection('Word help · '+a.wordHelp.length+' words · open a word only when you need it','word-help','task-section word-help');const list=el('div',null,'word-list');
+      a.wordHelp.forEach(w=>{const d=el('details',null,'word-hint');d.append(el('summary',w.term+(w.line?' · line '+w.line:'')));const m=el('p',w.meaning_zh,'zh');m.lang='zh';d.append(m);if(w.gloss_en)d.append(el('p',w.gloss_en,'muted'));list.append(d);});
+      wrap.append(list);form.append(wrap);}
+    let setHeading='';
     a.items.forEach(it=>{
+      if(it.section&&it.section!==setHeading){setHeading=it.section;form.append(el('h2',it.section==='warm-up'?'Warm-up · quick checks':'Practice questions','set-heading'));}
       const section=toggleSection(labelOf(it)+requirement(it),it.id,'task-section');const art=el('article',null,'item');art.dataset.itemId=it.id;section.append(art);
       if(it.type==='choice'){
         const fs=el('fieldset');fs.append(el('legend',(it.n?'Question '+it.n+' · '+it.stem:it.label)+requirement(it)));const ol=el('ol',null,'options');
@@ -92,7 +98,7 @@
   function rowEl(it,values,index){const group=toggleSection('Row '+(index+1)+(values[0]?' · '+values[0]:''),it.id+'-row-'+index,'table-row-group');const row=el('div',null,'table-row');it.columns.forEach((c,i)=>{const label=el('label');label.append(el('span',c,'col-label'));const t=el('textarea');t.rows=2;t.value=values[i]||'';t.dataset.min=56;t.dataset.tableItem=it.id;t.dataset.row=index;t.dataset.column=i;const meter=el('span','','cell-space');meter.id=it.id+'-'+index+'-'+i+'-space';t.setAttribute('aria-describedby',meter.id);label.append(t,meter);row.append(label);});group.append(row);group.addEventListener('toggle',()=>{if(group.open)row.querySelectorAll('textarea').forEach(autosize);});return group;}
   function renderRows(box,it,rows){box.replaceChildren();const n=Math.max(rows.length,it.minRows||1);for(let r=0;r<n;r++)box.append(rowEl(it,rows[r]||[],r));requestAnimationFrame(()=>box.querySelectorAll('textarea').forEach(autosize));}
   function itemById(id){return a.items.find(x=>x.id===id);}
-  function updateCounts(){form.querySelectorAll('[data-count-for]').forEach(c=>{const it=itemById(c.dataset.countFor),ed=editors[it.id];if(!ed)return;const t=ed.getText(),w=words(t),p=paras(t);let s=w+' word'+(w===1?'':'s')+' · '+p+' paragraph'+(p===1?'':'s');if(it.targetWords)s+=' · aim for '+it.targetWords[0]+'–'+it.targetWords[1]+' words';c.textContent=s;});form.querySelectorAll('[data-table-item]').forEach(t=>{const meter=$(t.dataset.tableItem+'-'+t.dataset.row+'-'+t.dataset.column+'-space');if(meter){const percent=Math.ceil(bytes(clean(t.value))/limits().tableCellBytes*100);meter.textContent='Cell space: '+percent+'% used';meter.classList.toggle('over-limit',percent>100);}});if(a){const gaps=missing();checklist.textContent=draftOnly?'Notebook: saved as a draft; no submission needed.':submitted?'Submission confirmed.':gaps.length?'Still needed: '+gaps.map(labelOf).join(' · '):'Required parts complete. Submit homework when you are ready.';}}
+  function updateCounts(){form.querySelectorAll('[data-count-for]').forEach(c=>{const it=itemById(c.dataset.countFor),ed=editors[it.id];if(!ed)return;const t=ed.getText(),w=words(t),p=paras(t);let s=w+' word'+(w===1?'':'s')+' · '+p+' paragraph'+(p===1?'':'s');if(it.targetWords)s+=' · aim for '+it.targetWords[0]+'–'+it.targetWords[1]+' words';c.textContent=s;});form.querySelectorAll('[data-table-item]').forEach(t=>{const meter=$(t.dataset.tableItem+'-'+t.dataset.row+'-'+t.dataset.column+'-space');if(meter){const percent=Math.ceil(bytes(clean(t.value))/limits().tableCellBytes*100);meter.textContent='Cell space: '+percent+'% used';meter.classList.toggle('over-limit',percent>100);}});if(a){const gaps=missing();checklist.textContent=draftOnly?'Notebook: saved as a draft; no submission needed.':submitted?'Submission confirmed.':gaps.length?'Still needed: '+gaps.map(labelOf).join(' · '):(a.practice?'Ready. Submit to check your answers and see the explanations.':'Required parts complete. Submit homework when you are ready.');}}
 
   /* ---------- responses ---------- */
   function responses(){const out={};if(!a)return out;a.items.forEach(it=>{
