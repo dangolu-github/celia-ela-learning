@@ -63,10 +63,13 @@
     if(a.passage){const wrap=toggleSection(a.passage.title,'passage','task-section');const sec=el('section',null,'card passage');if(a.passage.author)sec.append(el('p',a.passage.author,'muted'));
       if(a.passage.lines)a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));sec.append(row);});
       else(a.passage.paragraphs||[]).forEach(t=>sec.append(el('p',t)));wrap.append(sec);form.append(wrap);}
-    // Word help (2026-10-22): one collapsible list; each word opens on its own, so the meaning stays hidden until needed.
-    if(a.wordHelp&&a.wordHelp.length){const wrap=toggleSection('Word help · '+a.wordHelp.length+' words · open a word only when you need it','word-help','task-section word-help');const list=el('div',null,'word-list');
-      a.wordHelp.forEach(w=>{const d=el('details',null,'word-hint');d.append(el('summary',w.term+(w.line?' · line '+w.line:'')));const m=el('p',w.meaning_zh,'zh');m.lang='zh';d.append(m);if(w.gloss_en)d.append(el('p',w.gloss_en,'muted'));list.append(d);});
-      wrap.append(list);form.append(wrap);}
+    // Word help (2026-10-22): a fixed two-column list. Each meaning is already in place but blurred; tapping a word reveals it
+    // without moving anything else (the first version expanded chips and reflowed the list).
+    if(a.wordHelp&&a.wordHelp.length){const wrap=toggleSection('Word help · '+a.wordHelp.length+' words · tap a word to see its meaning','word-help','task-section word-help');const list=el('div',null,'word-list');
+      a.wordHelp.forEach(w=>{const row=el('button',null,'word-row');row.type='button';row.setAttribute('aria-expanded','false');const t=el('span',null,'term');t.append(el('b',w.term));if(w.line)t.append(el('span',' · line '+w.line,'line'));const m=el('span',null,'meaning');const zh=el('span',w.meaning_zh,'zh');zh.lang='zh';m.append(zh);if(w.gloss_en)m.append(el('span',w.gloss_en,'gloss'));row.append(t,m);
+        row.addEventListener('click',()=>{const on=row.getAttribute('aria-expanded')!=='true';row.setAttribute('aria-expanded',String(on));});list.append(row);});
+      const all=el('button','Show all meanings','small-button');all.type='button';all.addEventListener('click',()=>{const rows=[...list.querySelectorAll('.word-row')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
+      wrap.append(list,all);form.append(wrap);}
     let setHeading='';
     a.items.forEach(it=>{
       if(it.section&&it.section!==setHeading){setHeading=it.section;form.append(el('h2',it.section==='warm-up'?'Warm-up · quick checks':'Practice questions','set-heading'));}
@@ -167,12 +170,15 @@
     renderPrevious(st.previous||[]);
   }
 
+  // Archived by the teacher (2026-10-22): a plain notice only; saved work stays readable and nothing is blocked.
+  function archivedNote(on){let n=$('archived-note');if(!on){if(n)n.remove();return;}if(!n){n=el('p','This homework is archived: your teacher has replaced it with newer homework, so you do not need to finish it. Anything you saved stays here.','notice info');n.id='archived-note';head.append(n);}}
   /* ---------- load, save, submit ---------- */
   async function load(){
     if(!CeliaAPI.signedIn()||submitting)return;ready=false;const when=version,generation=authEpoch;say('Loading your saved work…');
     try{
       if(!rendered){const payload=await CeliaAPI.call('assignment',{assignmentId});if(generation!==authEpoch||!CeliaAPI.signedIn())return;a=payload.assignment;draftOnly=a.mode==='draft-only';if(draftOnly)submit.hidden=true;renderAssignment();const local=loadLocal();restore(local,!hasLocalDraft);rendered=true;}
       const data=await CeliaAPI.call('state',{assignmentId});if(generation!==authEpoch||!CeliaAPI.signedIn())return;
+      archivedNote(!!(data.control&&data.control.archived));
       if(data.submitted){displayState(data);return;}
       submitted=false;attempt=data.attempt||1;
       clearMarks();clearErrors();if(!data.control.receiving){freeze(true);say(data.control.intake?'This homework is not receiving new work at the moment. Download a copy if needed.':'This course is paused. New work is not being accepted.');return;}
