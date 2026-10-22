@@ -16,10 +16,10 @@
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
     try{
       const response=await fetch(window.CELIA_PORTAL.endpoint,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,action,token}),signal:controller.signal});
-      if(!response.ok)throw new Error('Connection unavailable. Your work is still on this device; please try again.');
+      if(!response.ok)throw Object.assign(new Error('Connection unavailable.'),{transport:true,code:'CONNECTION'});
       const data=await response.json();
-      if(!data.ok){if(/Please sign in/.test(data.error||''))forget();throw new Error(data.error||'Please try again.');}return data;
-    }catch(e){if(e.name==='AbortError')throw new Error('The request took too long. Your work is still on this device; please try again.');throw e;}finally{clearTimeout(timer);}
+      if(!data.ok){if(/Please sign in/.test(data.error||''))forget();const error=new Error(data.error||'Please try again.');['code','itemId','row','column','limitBytes','actualBytes','currentAttempt'].forEach(k=>{if(data[k]!=null)error[k]=data[k];});error.transport=false;throw error;}return data;
+    }catch(e){if(e.name==='AbortError')throw Object.assign(new Error('The request took too long.'),{transport:true,code:'TIMEOUT'});if(e.transport==null)e.transport=true;throw e;}finally{clearTimeout(timer);}
   }
   login.addEventListener('submit',async event=>{
     event.preventDefault();const input=login.querySelector('input'),button=login.querySelector('button');button.disabled=true;message.textContent='Opening your website…';

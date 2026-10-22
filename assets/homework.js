@@ -12,7 +12,7 @@
   const originForSubmit=async()=>{try{return window.PortalSubmissionOrigin?await window.PortalSubmissionOrigin.collect():null;}catch(_){return null;}};
   const warmOrigin=()=>{try{if(window.PortalSubmissionOrigin)window.PortalSubmissionOrigin.warm();}catch(_){}};
   const FB=window.CeliaFeedback,RT=window.CeliaRich;
-  let a=null,rendered=false,revision=0,ready=false,submitted=false,saving=false,dirty=false,timer,pendingId='',version=0,conflictData=null,authEpoch=0,hasLocalDraft=false,startedAt='',draftOnly=false;
+  let a=null,rendered=false,revision=0,attempt=1,ready=false,submitted=false,saving=false,submitting=false,dirty=false,timer,pendingId='',pendingAttempt=null,version=0,conflictData=null,authEpoch=0,hasLocalDraft=false,hasDeviceWork=false,startedAt='',draftOnly=false,localMeta=null,localSaved=true,lastReceipt=null,savePromise=null;
   const editors={};
   const say=t=>{status.textContent=t;};
   const el=(tag,text,cls)=>{const x=document.createElement(tag);if(text!=null)x.textContent=text;if(cls)x.className=cls;return x;};
@@ -21,44 +21,78 @@
   const fmt=iso=>{const d=new Date(iso);return isNaN(d)?String(iso||''):d.toLocaleString();};
   function autosize(t){t.style.height='auto';t.style.height=Math.max(t.scrollHeight+4,Number(t.dataset.min||120))+'px';}
   function richHtml(v){return RT.isHtml(v)?RT.sanitize(v):FB.plainHtml(v);}
+  const limits=()=>Object.assign({textBytes:14000,textHtmlBytes:22000,shortBytes:600,gapBytes:200,tableCellBytes:6000,responsesBytes:120000},a&&a.limits);
+  const bytes=t=>new TextEncoder().encode(String(t||'')).length;
+  const clean=t=>String(t==null?'':t).replace(/\r\n?/g,'\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'');
+  const labelOf=it=>it.n?'Question '+it.n:it.label;
+  const requirement=it=>it.required?(it.requiredUnless?' (paragraph or outline required)':' (required)'):(a.kind==='notebook'?'':' (optional)');
+  const localNotice=()=>localSaved?'Saved on this device.':'Not saved on this device. Keep this page open and download a copy.';
+  const sectionKey='celia-ela-sections:'+assignmentId;
+  let sectionState={};const memoryCopies=[];try{sectionState=JSON.parse(localStorage.getItem(sectionKey)||'{}')||{};}catch(_){}
+  function toggleSection(title,key,cls){const d=el('details',null,cls);d.dataset.sectionKey=key;d.open=sectionState[key]===true;d.append(el('summary',title));d.addEventListener('toggle',()=>{sectionState[key]=d.open;try{localStorage.setItem(sectionKey,JSON.stringify(sectionState));}catch(_){}});return d;}
+  function reveal(target){if(!target)return;for(let p=target.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;target.focus();}
+  const toolbar=el('section',null,'work-toolbar screen-only');toolbar.id='work-toolbar';toolbar.setAttribute('aria-label','Save and submit');
+  const actions=submit.parentElement;form.before(toolbar);toolbar.append(status,actions);
+  const download=el('button','Download a copy','secondary');download.type='button';download.id='download-draft';actions.append(download);
+  const resolve=el('button','Choose a draft','secondary');resolve.type='button';resolve.id='resolve-draft';resolve.hidden=true;actions.append(resolve);
+  resolve.addEventListener('click',()=>{conflict.scrollIntoView?.({block:'center'});reveal(conflict.querySelector('button'));});
+  const sectionActions=el('div',null,'section-actions');[['Open all','open-work-sections',true],['Close all','close-work-sections',false]].forEach(([title,id,value])=>{const b=el('button',title,'small-button');b.id=id;b.type='button';b.addEventListener('click',()=>document.querySelectorAll('[data-section-key]').forEach(d=>{d.open=value;}));sectionActions.append(b);});toolbar.append(sectionActions);
+  const more=el('details',null,'work-more-actions');more.append(el('summary','More options'));const moreBody=el('div',null,'more-actions');[...actions.children].filter(x=>x!==submit&&x!==download&&x!==resolve).forEach(x=>moreBody.append(x));moreBody.append(sectionActions);more.append(moreBody);actions.append(more);
+  const checklist=el('p','','submission-checklist');checklist.id='submission-checklist';toolbar.append(checklist);
+  const validationSummary=el('div',null,'validation-summary');validationSummary.id='validation-summary';validationSummary.setAttribute('role','alert');validationSummary.hidden=true;toolbar.append(validationSummary);
+  const exportArea=el('textarea');exportArea.id='draft-copy-text';exportArea.readOnly=true;exportArea.hidden=true;exportArea.setAttribute('aria-label','Copy of your work');toolbar.append(exportArea);
+  function canonical(raw){const out={};(a?a.items:[]).forEach(it=>{let v=(raw||{})[it.id];if(v==null)return;if(it.type==='short')v=clean(v).replace(/\n+/g,' ').trim();else if(it.type==='gaps')v=v.map(x=>clean(x).replace(/\n+/g,' ').trim());else if(it.type==='text')v=RT.isHtml(v)?RT.sanitize(clean(v)):RT.fromPlain(clean(v));else if(it.type==='table')v=v.map(row=>row.map(clean)).filter(row=>row.some(x=>x.trim()));if(v!==''&&(!Array.isArray(v)||v.length))out[it.id]=v;});return out;}
+  const same=(x,y)=>JSON.stringify(canonical(x))===JSON.stringify(canonical(y));
+  function backup(value,reason){const copy={reason,at:new Date().toISOString(),attempt,...value};try{const key=storageKey+'-backup-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);localStorage.setItem(key,JSON.stringify(copy));return true;}catch(_){memoryCopies.push(copy);say('A safety copy could not be saved. Download a copy before choosing another draft.');return false;}}
+  function copyText(responses,title){const lines=[title];(a?a.items:[]).forEach(it=>{const v=(responses||{})[it.id];if(v==null)return;lines.push('',labelOf(it));if(it.type==='table')v.forEach((row,i)=>{lines.push('Row '+(i+1));row.forEach((cell,j)=>lines.push(it.columns[j]+': '+cell));});else if(it.type==='choice')lines.push(v+'. '+(it.options['ABCDE'.indexOf(v)]||''));else if(it.type==='gaps')lines.push(v.join(' / '));else lines.push(RT.text(v));});return lines.join('\n');}
+  function exportText(){const parts=[copyText(responses(),(a?a.title:'Homework')+'\nCopy saved '+new Date().toLocaleString()+'\n'+(submitted&&lastReceipt&&same(responses(),lastReceipt.responses)?'Submitted copy':'Device draft — this copy is not a submission receipt'))];if(lastReceipt&&!same(responses(),lastReceipt.responses))parts.push(copyText(lastReceipt.responses,'Submitted copy · received '+fmt(lastReceipt.receivedAt)));if(conflictData)parts.push(copyText(conflictData.server,'Alternative: saved draft'),copyText(conflictData.local,'Alternative: this device’s draft'));const add=v=>{if(v.responses)parts.push(copyText(v.responses,'Earlier safety copy · '+(v.at||'')));if(v.local)parts.push(copyText(v.local,'Earlier device copy · '+(v.at||'')));if(v.server)parts.push(copyText(v.server,'Earlier saved copy · '+(v.at||'')));};memoryCopies.forEach(add);try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key===storageKey+'-conflict-backup'||key.startsWith(storageKey+'-backup-'))add(JSON.parse(localStorage.getItem(key)));}}catch(_){}return parts.join('\n\n--------------------\n\n');}
+  download.addEventListener('click',()=>{const text=exportText();try{const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),link=el('a');link.href=url;link.download=assignmentId+'-copy-'+new Date().toISOString().slice(0,10)+'.txt';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(_){exportArea.hidden=false;exportArea.value=text;exportArea.focus();exportArea.select();say('Select and copy the text below into a document. This does not submit your work.');}});
+  function fieldTarget(error){const art=form.querySelector('[data-item-id="'+error.itemId+'"]');if(!art)return null;if(error.row!=null){const rows=[...art.querySelectorAll('.table-row')].filter(row=>error.domRow||[...row.querySelectorAll('textarea')].some(x=>x.value.trim()));const row=rows[error.row];return row&&row.querySelectorAll('textarea')[error.column||0];}if(error.column!=null)return art.querySelectorAll('[data-gap]')[error.column];return art.querySelector('input,textarea,.rt-area');}
+  function clearErrors(){form.querySelectorAll('.field-error').forEach(x=>x.remove());form.querySelectorAll('[aria-invalid]').forEach(x=>{x.removeAttribute('aria-invalid');const ids=(x.getAttribute('aria-describedby')||'').split(' ').filter(s=>!s.startsWith('field-error-'));if(ids.length)x.setAttribute('aria-describedby',ids.join(' '));else x.removeAttribute('aria-describedby');});validationSummary.replaceChildren();validationSummary.hidden=true;}
+  function showErrors(errors,focus){clearErrors();if(!errors.length)return;validationSummary.hidden=false;validationSummary.append(el('strong','Please check:'));const list=el('ul');errors.forEach((error,i)=>{const target=fieldTarget(error),li=el('li');if(target){const b=el('button',error.message,'error-link');b.type='button';b.addEventListener('click',()=>reveal(target));li.append(b);target.setAttribute('aria-invalid','true');const note=el('p',error.message,'field-error');note.id='field-error-'+i;target.setAttribute('aria-describedby',((target.getAttribute('aria-describedby')||'')+' '+note.id).trim());target.insertAdjacentElement('afterend',note);}else li.textContent=error.message;list.append(li);});validationSummary.append(list);if(focus)reveal(fieldTarget(errors[0]));}
+  function validate(final){const r=responses(),lim=limits(),errors=[];const tooLong=(it,value,limit,extra={})=>{const n=bytes(clean(value));if(n>limit)errors.push({itemId:it.id,...extra,code:'FIELD_TOO_LONG',message:labelOf(it)+(extra.row!=null?' · row '+(extra.row+1)+', '+it.columns[extra.column]:'')+' is too long. '+Math.ceil((n-limit)/limit*100)+'% over the limit. Shorten this part or download a copy first.'});};a.items.forEach(it=>{const v=r[it.id];if(v!=null){if(it.type==='table'){const rows=form.querySelectorAll('[data-table="'+it.id+'"] .table-row');rows.forEach((row,i)=>row.querySelectorAll('textarea').forEach((cell,j)=>tooLong(it,cell.value,lim.tableCellBytes,{row:i,column:j,domRow:true})));}else if(it.type==='short')tooLong(it,v,lim.shortBytes);else if(it.type==='gaps')v.forEach((x,i)=>tooLong(it,x,lim.gapBytes,{column:i}));else if(it.type==='text'){tooLong(it,RT.text(v),lim.textBytes);if(bytes(v)>lim.textHtmlBytes&&!errors.some(e=>e.itemId===it.id))errors.push({itemId:it.id,code:'FIELD_TOO_LONG',message:labelOf(it)+' has too much formatting. Download a copy, then use Clear formatting or shorten this part.'});}}if(final&&it.required&&v==null&&!(it.requiredUnless&&r[it.requiredUnless]!=null))errors.push({itemId:it.id,code:'REQUIRED',message:'Please complete: '+labelOf(it)});});if(bytes(JSON.stringify(canonical(r)))>lim.responsesBytes)errors.push({code:'RESPONSES_TOO_LARGE',message:'This homework is too large to save as one piece. Download a copy and ask your teacher how to split it.'});return errors;}
+  function errorMessage(error){const it=error.itemId&&itemById(error.itemId);let where=it?labelOf(it):'';if(it&&error.row!=null)where+=' · row '+(error.row+1)+', '+it.columns[error.column||0];return where?where+': '+error.message:error.message;}
+  function handleError(error){if(error.itemId||error.code==='RESPONSES_TOO_LARGE')showErrors([{...error,message:errorMessage(error)}],true);say(localNotice()+' '+errorMessage(error));}
 
   /* ---------- rendering ---------- */
   function renderAssignment(){
     head.replaceChildren();form.replaceChildren();Object.keys(editors).forEach(k=>delete editors[k]);
     head.append(el('p',a.classLabel+' · '+(a.kind==='notebook'?'Notebook':'Homework'),'eyebrow'),el('h1',a.title));
     if(a.intro)head.append(el('p',a.intro,'lead'));
-    if(a.instructions&&a.instructions.length){const ul=el('ul');a.instructions.forEach(t=>ul.append(el('li',t)));head.append(ul);}
-    if(a.passage){const sec=el('section',null,'card passage');sec.append(el('h2',a.passage.title));if(a.passage.author)sec.append(el('p',a.passage.author,'muted'));
+    if(a.instructions&&a.instructions.length){const guide=toggleSection('Instructions','instructions','work-instructions');const ul=el('ul');a.instructions.forEach(t=>ul.append(el('li',t)));guide.append(ul);head.append(guide);}
+    if(a.passage){const wrap=toggleSection(a.passage.title,'passage','task-section');const sec=el('section',null,'card passage');if(a.passage.author)sec.append(el('p',a.passage.author,'muted'));
       if(a.passage.lines)a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));sec.append(row);});
-      else(a.passage.paragraphs||[]).forEach(t=>sec.append(el('p',t)));form.append(sec);}
+      else(a.passage.paragraphs||[]).forEach(t=>sec.append(el('p',t)));wrap.append(sec);form.append(wrap);}
     a.items.forEach(it=>{
-      const art=el('article',null,'item');art.dataset.itemId=it.id;
+      const section=toggleSection(labelOf(it)+requirement(it),it.id,'task-section');const art=el('article',null,'item');art.dataset.itemId=it.id;section.append(art);
       if(it.type==='choice'){
-        const fs=el('fieldset');fs.append(el('legend',(it.n?'Question '+it.n+' · '+it.stem:it.label)));const ol=el('ol',null,'options');
+        const fs=el('fieldset');fs.append(el('legend',(it.n?'Question '+it.n+' · '+it.stem:it.label)+requirement(it)));const ol=el('ol',null,'options');
         it.options.forEach((o,i)=>{const li=el('li'),label=el('label'),input=el('input');input.type='radio';input.name=it.id;input.value='ABCDE'[i];label.append(input,document.createTextNode(input.value+'. '+o));li.append(label);ol.append(li);});
         fs.append(ol);art.append(fs);const clear=el('button','Clear answer','small-button');clear.type='button';clear.dataset.clear=it.id;art.append(clear);
       }else if(it.type==='short'){
-        const label=el('label',it.label+(it.required?'':' (optional)'));const input=el('input');input.type='text';input.dataset.item=it.id;input.maxLength=400;input.placeholder=it.placeholder||'';input.autocomplete='off';label.append(input);art.append(label);if(it.hint)art.append(el('p',it.hint,'muted'));
+        const label=el('label',it.label+requirement(it));const input=el('input');input.type='text';input.dataset.item=it.id;input.placeholder=it.placeholder||'';input.autocomplete='off';if(it.required)input.setAttribute('aria-required','true');label.append(input);art.append(label);if(it.hint)art.append(el('p',it.hint,'muted'));
+        const table=a.items.find(x=>x.type==='table'&&x.columns.some(c=>/theme/i.test(c)));if(table&&/theme/i.test(it.label)){const reuse=el('button','Use a theme from my table','small-button');reuse.type='button';reuse.id='reuse-table-theme';reuse.addEventListener('click',()=>{const column=table.columns.findIndex(c=>/theme/i.test(c)),rows=responses()[table.id]||[],values=rows.map((r,i)=>({text:r[column],row:i+1})).filter(x=>x.text&&x.text.trim());const old=art.querySelector('.theme-options');if(old){old.remove();return;}const options=el('div',null,'theme-options');if(!values.length)options.append(el('p','Write a theme in your table first, or type it above.','muted'));values.forEach(value=>{const b=el('button','Row '+value.row+': '+value.text,'secondary');b.type='button';b.addEventListener('click',()=>{if(input.value.trim()&&input.value!==value.text&&!window.confirm('Replace the theme field with this table theme?'))return;input.value=value.text;options.remove();changed(400);reveal(input);});options.append(b);});art.append(options);});art.append(reuse);}
       }else if(it.type==='gaps'){
-        const fs=el('fieldset');fs.append(el('legend',it.label+(it.required?'':' (optional)')));const p=el('p',null,'gaps');p.dataset.gaps=it.id;
+        const fs=el('fieldset');fs.append(el('legend',it.label+requirement(it)));const p=el('p',null,'gaps');p.dataset.gaps=it.id;
         const parts=it.template.split('___');parts.forEach((part,i)=>{p.append(document.createTextNode(part));if(i<parts.length-1){const input=el('input');input.type='text';input.className='gap';input.dataset.gap=String(i);input.autocomplete='off';input.autocapitalize='off';input.setAttribute('aria-label','Gap '+(i+1));p.append(input);}});
         fs.append(p);art.append(fs);if(it.hint)art.append(el('p',it.hint,'muted'));
       }else if(it.type==='text'){
-        art.append(el('p',it.label+(it.required||a.kind==='notebook'?'':' (optional)'),'item-label'));
+        art.append(el('p',it.label+requirement(it),'item-label'));
         const box=el('div',null,'rich');editors[it.id]=RT.editor(box,{placeholder:it.placeholder||'',itemId:it.id,onInput:()=>changed(1500)});art.append(box);
+        editors[it.id].area.setAttribute('aria-label',it.label);if(it.required)editors[it.id].area.setAttribute('aria-required','true');
         if(it.hint)art.append(el('p',it.hint,'muted'));const c=el('p','','counts');c.id=it.id+'-count';c.dataset.countFor=it.id;art.append(c);
       }else if(it.type==='table'){
-        art.append(el('h2',it.label));if(it.hint)art.append(el('p',it.hint,'muted'));const box=el('div',null,'table-input');box.dataset.table=it.id;art.append(box);renderRows(box,it,it.seedRows||[]);
+        if(it.hint)art.append(el('p',it.hint,'muted'));art.append(el('p','Each cell shows how much space is used. Your text is kept if a limit is reached; you can download a copy.','muted'));const box=el('div',null,'table-input');box.dataset.table=it.id;art.append(box);renderRows(box,it,it.seedRows||[]);
         const add=el('button','Add a row','small-button');add.type='button';add.dataset.addRow=it.id;art.append(add);
       }
-      form.append(art);
+      form.append(section);
     });
     updateCounts();
   }
-  function rowEl(it,values){const row=el('div',null,'table-row');it.columns.forEach((c,i)=>{const label=el('label');label.append(el('span',c,'col-label'));const t=el('textarea');t.rows=2;t.value=values[i]||'';t.dataset.min=56;label.append(t);row.append(label);});return row;}
-  function renderRows(box,it,rows){box.replaceChildren();const n=Math.max(rows.length,it.minRows||1);for(let r=0;r<n;r++)box.append(rowEl(it,rows[r]||[]));requestAnimationFrame(()=>box.querySelectorAll('textarea').forEach(autosize));}  // pre-filled cells open at full height
+  function rowEl(it,values,index){const group=toggleSection('Row '+(index+1)+(values[0]?' · '+values[0]:''),it.id+'-row-'+index,'table-row-group');const row=el('div',null,'table-row');it.columns.forEach((c,i)=>{const label=el('label');label.append(el('span',c,'col-label'));const t=el('textarea');t.rows=2;t.value=values[i]||'';t.dataset.min=56;t.dataset.tableItem=it.id;t.dataset.row=index;t.dataset.column=i;const meter=el('span','','cell-space');meter.id=it.id+'-'+index+'-'+i+'-space';t.setAttribute('aria-describedby',meter.id);label.append(t,meter);row.append(label);});group.append(row);group.addEventListener('toggle',()=>{if(group.open)row.querySelectorAll('textarea').forEach(autosize);});return group;}
+  function renderRows(box,it,rows){box.replaceChildren();const n=Math.max(rows.length,it.minRows||1);for(let r=0;r<n;r++)box.append(rowEl(it,rows[r]||[],r));requestAnimationFrame(()=>box.querySelectorAll('textarea').forEach(autosize));}
   function itemById(id){return a.items.find(x=>x.id===id);}
-  function updateCounts(){form.querySelectorAll('[data-count-for]').forEach(c=>{const it=itemById(c.dataset.countFor),ed=editors[it.id];if(!ed)return;const t=ed.getText(),w=words(t),p=paras(t);let s=w+' word'+(w===1?'':'s')+' · '+p+' paragraph'+(p===1?'':'s');if(it.targetWords)s+=' · aim for '+it.targetWords[0]+'–'+it.targetWords[1]+' words';c.textContent=s;});}
+  function updateCounts(){form.querySelectorAll('[data-count-for]').forEach(c=>{const it=itemById(c.dataset.countFor),ed=editors[it.id];if(!ed)return;const t=ed.getText(),w=words(t),p=paras(t);let s=w+' word'+(w===1?'':'s')+' · '+p+' paragraph'+(p===1?'':'s');if(it.targetWords)s+=' · aim for '+it.targetWords[0]+'–'+it.targetWords[1]+' words';c.textContent=s;});form.querySelectorAll('[data-table-item]').forEach(t=>{const meter=$(t.dataset.tableItem+'-'+t.dataset.row+'-'+t.dataset.column+'-space');if(meter){const percent=Math.ceil(bytes(clean(t.value))/limits().tableCellBytes*100);meter.textContent='Cell space: '+percent+'% used';meter.classList.toggle('over-limit',percent>100);}});if(a){const gaps=missing();checklist.textContent=draftOnly?'Notebook: saved as a draft; no submission needed.':submitted?'Submission confirmed.':gaps.length?'Still needed: '+gaps.map(labelOf).join(' · '):'Required parts complete. Submit homework when you are ready.';}}
 
   /* ---------- responses ---------- */
   function responses(){const out={};if(!a)return out;a.items.forEach(it=>{
@@ -68,16 +102,15 @@
     else if(it.type==='gaps'){const vals=[...form.querySelectorAll('[data-gaps="'+it.id+'"] input')].map(x=>x.value.trim());if(vals.some(v=>v))out[it.id]=vals;}
     else if(it.type==='table'){const rows=[...form.querySelectorAll('[data-table="'+it.id+'"] .table-row')].map(r=>[...r.querySelectorAll('textarea')].map(x=>x.value)).filter(r=>r.some(c=>c.trim()));if(rows.length)out[it.id]=rows;}
   });return out;}
-  function restore(r){r=r||{};a.items.forEach(it=>{const v=r[it.id];
+  function restore(r,useSeed=false){r=r||{};a.items.forEach(it=>{const v=r[it.id];
     if(it.type==='choice')form.querySelectorAll('input[name="'+it.id+'"]').forEach(x=>{x.checked=x.value===v;});
     else if(it.type==='text'){const ed=editors[it.id];if(ed)ed.setValue(v||'');}
     else if(it.type==='short'){const t=form.querySelector('[data-item="'+it.id+'"]');if(t)t.value=v||'';}
     else if(it.type==='gaps'){form.querySelectorAll('[data-gaps="'+it.id+'"] input').forEach((x,i)=>{x.value=Array.isArray(v)&&v[i]?v[i]:'';});}
-    else if(it.type==='table'){const box=form.querySelector('[data-table="'+it.id+'"]');if(box)renderRows(box,it,Array.isArray(v)&&v.length?v:(it.seedRows||[]));}  // seedRows: the class version until the learner saves her own
+    else if(it.type==='table'){const box=form.querySelector('[data-table="'+it.id+'"]');if(box)renderRows(box,it,Array.isArray(v)?v:(useSeed?it.seedRows||[]:[]));}
   });updateCounts();}
-  const same=(x,y)=>JSON.stringify(x)===JSON.stringify(y);
-  function persist(){hasLocalDraft=true;try{localStorage.setItem(storageKey,JSON.stringify({responses:responses(),startedAt}));}catch(_){say('Your work could not be saved on this device. Copy your text somewhere safe before leaving.');}}
-  function loadLocal(){try{const x=JSON.parse(localStorage.getItem(storageKey)||'null');if(x){hasLocalDraft=true;startedAt=x.startedAt||startedAt;return x.responses||{};}}catch(_){say('A previous draft could not be loaded.');}return {};}
+  function persist(){hasDeviceWork=true;const value={responses:responses(),startedAt,attempt,savedAt:new Date().toISOString()};try{localStorage.setItem(storageKey,JSON.stringify(value));hasLocalDraft=true;localMeta=value;localSaved=true;return true;}catch(_){localSaved=false;say('Your work could not be saved on this device. Download a copy before leaving.');return false;}}
+  function loadLocal(){try{const x=JSON.parse(localStorage.getItem(storageKey)||'null');if(x){hasLocalDraft=true;hasDeviceWork=true;localMeta=x;startedAt=x.startedAt||startedAt;return x.responses||{};}}catch(_){localSaved=false;say('A previous draft could not be loaded. Keep this page open and contact your teacher.');}return {};}
   function freeze(value){form.querySelectorAll('input,textarea,button').forEach(x=>{x.disabled=value;});Object.values(editors).forEach(ed=>ed.setDisabled(value));submit.disabled=value;}
   function missing(){const r=responses();return a.items.filter(it=>it.required&&!(it.requiredUnless&&r[it.requiredUnless]!=null)&&r[it.id]==null);}
 
@@ -101,7 +134,8 @@
     into.append(d);
   }
   function displayState(st){
-    submitted=true;ready=false;dirty=false;clearTimeout(timer);restore(st.receipt.responses);freeze(true);conflict.hidden=true;clearMarks();result.hidden=false;
+    if(hasDeviceWork&&!same(responses(),st.receipt.responses)&&!backup({responses:responses()},'Device copy before showing the submission receipt')){lastReceipt=st.receipt;submitted=true;ready=false;dirty=false;clearTimeout(timer);freeze(true);clearMarks();result.hidden=false;result.append(el('h2','Submission received · attempt '+st.attempt),el('p','Received '+fmt(st.receipt.receivedAt)+'. Your different device draft is still shown below because a safety copy could not be saved. Download a copy now to keep both versions.'));say('Submission received. Different device text kept on screen — download both copies before leaving.');return;}
+    attempt=st.attempt;lastReceipt=st.receipt;submitted=true;ready=false;dirty=false;clearTimeout(timer);restore(st.receipt.responses);freeze(true);conflict.hidden=true;resolve.hidden=true;clearErrors();clearMarks();result.hidden=false;
     const g=st.receipt.grade;
     result.append(el('h2','Submitted · attempt '+st.attempt+(g?' · '+g.score+' / '+g.total:'')));
     result.append(el('p','Received '+fmt(st.receipt.receivedAt)+'. Your work is saved exactly as you handed it in.'));
@@ -109,7 +143,7 @@
     else if(st.receipt.answersPending)result.append(el('p','Your answers are recorded. The results will appear here when your teacher releases them.'));
     if(st.feedback){feedbackSummary(st.feedback,result);feedbackBlocks(st.feedback);}
     else if(st.mode==='teacher-checked')result.append(el('p','Your teacher will read this and return feedback here.'));
-    renderPrevious(st.previous||[]);say('Submitted.');
+    renderPrevious(st.previous||[]);say('Submitted. Receipt received '+fmt(st.receipt.receivedAt)+'.');updateCounts();
   }
   function renderPrevious(list){
     if(!list.length)return;previous.hidden=false;previous.append(el('h2','Earlier attempts'));
@@ -129,54 +163,67 @@
 
   /* ---------- load, save, submit ---------- */
   async function load(){
-    if(!CeliaAPI.signedIn())return;ready=false;const when=version,generation=authEpoch;say('Loading your saved work…');
+    if(!CeliaAPI.signedIn()||submitting)return;ready=false;const when=version,generation=authEpoch;say('Loading your saved work…');
     try{
-      if(!rendered){const payload=await CeliaAPI.call('assignment',{assignmentId});if(generation!==authEpoch||!CeliaAPI.signedIn())return;a=payload.assignment;draftOnly=a.mode==='draft-only';if(draftOnly)submit.hidden=true;renderAssignment();restore(loadLocal());rendered=true;}
+      if(!rendered){const payload=await CeliaAPI.call('assignment',{assignmentId});if(generation!==authEpoch||!CeliaAPI.signedIn())return;a=payload.assignment;draftOnly=a.mode==='draft-only';if(draftOnly)submit.hidden=true;renderAssignment();const local=loadLocal();restore(local,!hasLocalDraft);rendered=true;}
       const data=await CeliaAPI.call('state',{assignmentId});if(generation!==authEpoch||!CeliaAPI.signedIn())return;
       if(data.submitted){displayState(data);return;}
-      clearMarks();if(!data.control.receiving){freeze(true);say(data.control.intake?'This homework is not receiving new work at the moment. Your saved text stays on this device.':'This course is paused. New work is not being accepted.');return;}
+      submitted=false;attempt=data.attempt||1;
+      clearMarks();clearErrors();if(!data.control.receiving){freeze(true);say(data.control.intake?'This homework is not receiving new work at the moment. Download a copy if needed.':'This course is paused. New work is not being accepted.');return;}
       freeze(false);if(draftOnly)submit.hidden=true;showRevision(data);
       revision=data.draft?data.draft.revision:0;const local=responses(),server=data.draft?data.draft.responses:{};
-      if(data.draft&&!same(local,server)&&hasLocalDraft&&Object.keys(local).length){conflictData={server,local};conflict.hidden=false;say('Choose which saved draft to use. Both copies will be kept.');return;}
-      if(version===when&&data.draft){restore(server);if(data.draft.startedAt&&!startedAt)startedAt=data.draft.startedAt;}
-      ready=true;if(!draftOnly)warmOrigin();say(data.draft?'Saved work loaded.':'Your work is saved on this device as you type.');
-      if(!data.draft&&Object.keys(responses()).length){dirty=true;await sync();}
+      const previousCopy=(data.previous||[]).some(x=>same(local,x.receipt.responses));
+      if(data.draft&&!same(local,server)&&hasDeviceWork&&!previousCopy){conflictData={server,local,serverSavedAt:data.draft.savedAt,localSavedAt:localMeta&&localMeta.savedAt};conflict.hidden=false;resolve.hidden=false;let info=conflict.querySelector('.draft-times');if(!info){info=el('p','','draft-times muted');conflict.append(info);}info.textContent='Saved draft: '+fmt(data.draft.savedAt)+'. Device copy: '+(localMeta&&localMeta.savedAt?fmt(localMeta.savedAt):'time unavailable')+'. Download a copy to keep both.';say('Choose which draft to continue. Your answers stay here until you choose.');updateCounts();return;}
+      conflict.hidden=true;resolve.hidden=true;conflictData=null;
+      if(version===when&&data.draft){if(hasDeviceWork&&!same(local,server)&&!backup({responses:local},'Before opening the saved revision'))return;restore(server);if(data.draft.startedAt&&!startedAt)startedAt=data.draft.startedAt;if(hasDeviceWork)persist();}
+      ready=true;dirty=false;if(!draftOnly)warmOrigin();say(data.draft?'Cloud draft loaded. '+(draftOnly?'':'Not submitted yet.'):'Start writing. Changes will be saved as a draft.');updateCounts();
+      // A prefilled teacher row is a starting point, not learner work. Only a real device draft is synced here.
+      if(!data.draft&&hasDeviceWork&&!previousCopy){dirty=true;await sync();}
     }catch(e){say(e.message);}
   }
   conflict.querySelectorAll('button').forEach(button=>button.addEventListener('click',async()=>{
-    if(!conflictData)return;try{localStorage.setItem(storageKey+'-conflict-backup',JSON.stringify({local:conflictData.local,server:conflictData.server,at:new Date().toISOString()}));}catch(_){say('Unable to keep both drafts. Copy your text somewhere safe before choosing.');return;}
-    if(button.dataset.draft==='server')restore(conflictData.server);persist();conflict.hidden=true;conflictData=null;ready=true;dirty=true;await sync();
+    if(!conflictData)return;if(!backup({local:responses(),server:conflictData.server},'Draft choice'))return;
+    if(button.dataset.draft==='server')restore(conflictData.server);persist();conflict.hidden=true;resolve.hidden=true;conflictData=null;ready=true;dirty=true;await sync();
   }));
   async function sync(){
-    if(!ready||submitted||saving||!dirty||!CeliaAPI.signedIn())return;saving=true;dirty=false;const snapshot=responses(),generation=authEpoch;say('Saving…');
-    try{const data=await CeliaAPI.call('saveDraft',{assignmentId,responses:snapshot,baseRevision:revision,startedAt});if(generation!==authEpoch||!CeliaAPI.signedIn())return;if(data.submitted){displayState(data);return;}revision=data.draft.revision;say('Saved '+new Date(data.draft.savedAt).toLocaleTimeString()+'.');}
-    catch(e){dirty=true;say('Saved on this device. '+e.message);if(/another page/.test(e.message)){ready=false;await load();}}
-    finally{saving=false;if(dirty&&ready&&!submitted)timer=setTimeout(sync,5000);}
+    if(!ready||submitted||!dirty||!CeliaAPI.signedIn())return;if(saving)return savePromise;
+    const errors=validate(false);if(errors.length){showErrors(errors,false);say(localNotice()+' Fix the marked part before it can save to the cloud.');return;}
+    saving=true;dirty=false;const snapshot=responses(),generation=authEpoch,when=version;let retry=false;say('Saving cloud draft…');
+    savePromise=(async()=>{try{const data=await CeliaAPI.call('saveDraft',{assignmentId,responses:snapshot,baseRevision:revision,startedAt,attempt});if(generation!==authEpoch||!CeliaAPI.signedIn())return;if(data.submitted){displayState(data);return;}revision=data.draft.revision;if(data.draft.attempt)attempt=data.draft.attempt;if(version===when&&data.draft.responses){restore(data.draft.responses);persist();}say('Cloud draft saved '+new Date(data.draft.savedAt).toLocaleTimeString()+'. '+(draftOnly?'':'Not submitted yet.')+(localSaved?'':' Download a copy before leaving.'));}
+    catch(e){dirty=true;retry=!!e.transport;handleError(e);if(e.code==='DRAFT_CONFLICT'||e.code==='ATTEMPT_CHANGED'||/another page/.test(e.message)){ready=false;await load();}}
+    finally{saving=false;savePromise=null;if(dirty&&ready&&!submitted&&(retry||version!==when))timer=setTimeout(sync,5000);}})();
+    return savePromise;
   }
-  function changed(delay){if(submitted)return;version++;if(!startedAt)startedAt=new Date().toISOString();updateCounts();persist();dirty=true;say('Saved on this device.');clearTimeout(timer);timer=setTimeout(sync,delay);}
+  function changed(delay){if(submitted)return;version++;if(!startedAt)startedAt=new Date().toISOString();updateCounts();persist();dirty=true;const errors=validate(false);showErrors(errors,false);say(localNotice()+(errors.length?' Fix the marked part before it can save to the cloud.':' Not submitted yet.'));clearTimeout(timer);if(!errors.length)timer=setTimeout(sync,delay);}
   form.addEventListener('input',e=>{const t=e.target;if(t.classList&&t.classList.contains('rt-area'))return;if(t.tagName==='TEXTAREA'){autosize(t);changed(1500);}else if(t.type==='text')changed(1200);});
   form.addEventListener('change',e=>{if(e.target.type==='radio')changed(400);});
   form.addEventListener('submit',e=>e.preventDefault());
   form.addEventListener('click',event=>{
     const clear=event.target.closest('[data-clear]');if(clear){form.querySelectorAll('input[name="'+clear.dataset.clear+'"]').forEach(x=>{x.checked=false;});changed(400);return;}
-    const add=event.target.closest('[data-add-row]');if(add){const it=itemById(add.dataset.addRow),box=form.querySelector('[data-table="'+it.id+'"]');if(box.querySelectorAll('.table-row').length<(it.maxRows||12))box.append(rowEl(it,[]));}
+    const add=event.target.closest('[data-add-row]');if(add){const it=itemById(add.dataset.addRow),box=form.querySelector('[data-table="'+it.id+'"]'),n=box.querySelectorAll('.table-row').length;if(n<(it.maxRows||12)){const row=rowEl(it,[],n);row.open=true;box.append(row);updateCounts();row.querySelector('textarea').focus();}else say('This table has reached its '+(it.maxRows||12)+'-row limit. Download a copy if you need more space.');}
   });
   document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();clearTimeout(timer);sync();}});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty){clearTimeout(timer);sync();}});
   submit.addEventListener('click',async()=>{
+    if(submitting||submitted)return;
     if(!CeliaAPI.signedIn()){say('Please enter the website password before submitting.');document.querySelector('#account-panel input').focus();return;}
-    if(!ready){say('Load your saved work and resolve any draft choice before submitting.');return;}
-    const gaps=missing();if(gaps.length){say('Please complete: '+gaps.map(it=>it.n?'Question '+it.n:it.label).join('; '));const first=form.querySelector('[data-item-id="'+gaps[0].id+'"]');const f=first&&first.querySelector('textarea,input,.rt-area');if(f)f.focus();return;}
+    if(!ready){say(conflictData?'Choose a draft above before submitting. Both copies are available to download.':'Load your saved work before submitting.');if(conflictData)resolve.click();return;}
+    const errors=validate(true);if(errors.length){showErrors(errors,true);say('Please check the marked parts. Your text has not been submitted.');return;}
     if(!window.confirm('Hand in this work now? After submitting you cannot change it unless your teacher opens a revision.'))return;
-    if(!pendingId){pendingId=crypto.randomUUID();try{localStorage.setItem(storageKey+'-submit-request',pendingId);}catch(_){}}
-    const snapshot=responses(),generation=authEpoch,elapsedSeconds=startedAt?Math.max(0,Math.round((Date.now()-Date.parse(startedAt))/1000)):null;freeze(true);clearTimeout(timer);say('Submitting… Please keep this page open.');
-    try{const submissionOrigin=await originForSubmit();const data=await CeliaAPI.call('submit',{assignmentId,responses:snapshot,requestId:pendingId,elapsedSeconds,submissionOrigin});if(generation!==authEpoch||!CeliaAPI.signedIn())return;pendingId='';try{localStorage.removeItem(storageKey+'-submit-request');}catch(_){}displayState(data.state);}
-    catch(e){if(generation===authEpoch){freeze(false);say(e.message+' Click Submit again to confirm receipt.');}}
+    persist();freeze(true);clearTimeout(timer);if(savePromise)await savePromise;if(dirty&&ready&&!submitted)await sync();if(!ready||submitted){if(!submitted)freeze(false);return;}
+    if(pendingId&&pendingAttempt!==attempt){backup({requestId:pendingId,requestAttempt:pendingAttempt},'Earlier submission request');pendingId='';}
+    if(!pendingId){pendingId=crypto.randomUUID();pendingAttempt=attempt;try{localStorage.setItem(storageKey+'-submit-request',pendingId);localStorage.setItem(storageKey+'-submit-attempt',String(attempt));}catch(_){}}
+    const snapshot=responses(),generation=authEpoch,elapsedSeconds=startedAt?Math.max(0,Math.round((Date.now()-Date.parse(startedAt))/1000)):null;submitting=true;say('Submitting… Please keep this page open.');
+    try{const submissionOrigin=await originForSubmit();const data=await CeliaAPI.call('submit',{assignmentId,responses:snapshot,requestId:pendingId,elapsedSeconds,submissionOrigin,attempt,baseRevision:revision});if(generation!==authEpoch||!CeliaAPI.signedIn())return;clearPending();displayState(data.state);if(data.replayed&&data.currentAttempt>data.state.attempt){submitting=false;await load();say('Your earlier submission is confirmed. A new revision is open below.');}}
+    catch(e){if(generation===authEpoch){freeze(false);if(e.transport){say('Checking whether your submission arrived…');try{const st=await CeliaAPI.call('state',{assignmentId});if(st.submitted){clearPending();displayState(st);}else{say(localNotice()+' No receipt is confirmed yet. Submit again when your connection is ready.');}}catch(_){say(localNotice()+' Receipt could not be checked. Keep this page open or download a copy; try Submit again when connected.');}}else if(e.code==='DRAFT_CONFLICT'||e.code==='ATTEMPT_CHANGED'){submitting=false;await load();if(!conflictData)say('The saved work changed. Review the current draft before submitting.');}else handleError(e);}}
+    finally{submitting=false;}
   });
-  try{pendingId=localStorage.getItem(storageKey+'-submit-request')||'';}catch(_){}
+  function clearPending(){pendingId='';pendingAttempt=null;try{localStorage.removeItem(storageKey+'-submit-request');localStorage.removeItem(storageKey+'-submit-attempt');}catch(_){}}
+  try{pendingId=localStorage.getItem(storageKey+'-submit-request')||'';pendingAttempt=Number(localStorage.getItem(storageKey+'-submit-attempt'))||null;}catch(_){}
   $('refresh-work').addEventListener('click',load);
   const focusBtn=$('focus-mode');if(focusBtn)focusBtn.addEventListener('click',()=>{const on=document.body.classList.toggle('focus');focusBtn.textContent=on?'Leave focus mode':'Focus mode';});
   window.addEventListener('celia-login',()=>{authEpoch++;load();});
-  window.addEventListener('celia-logout',()=>{authEpoch++;ready=false;submitted=false;dirty=false;clearTimeout(timer);clearMarks();freeze(false);conflict.hidden=true;form.replaceChildren();head.replaceChildren();rendered=false;say('Signed out. Your local draft is preserved.');});
+  window.addEventListener('celia-logout',()=>{authEpoch++;ready=false;submitted=false;submitting=false;dirty=false;clearTimeout(timer);clearMarks();clearErrors();freeze(false);conflict.hidden=true;resolve.hidden=true;form.replaceChildren();head.replaceChildren();rendered=false;hasDeviceWork=false;hasLocalDraft=false;localMeta=null;say('Signed out. Your local draft is preserved.');});
+  const printOpen=[];window.addEventListener('beforeprint',()=>{document.querySelectorAll('[data-section-key]').forEach(d=>{printOpen.push([d,d.open]);d.open=true;});form.querySelectorAll('textarea').forEach(autosize);});window.addEventListener('afterprint',()=>{printOpen.splice(0).forEach(([d,open])=>{d.open=open;});});
   window.addEventListener('online',sync);load();
 })();
