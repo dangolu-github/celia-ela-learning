@@ -54,3 +54,7 @@ details.feedback-answer{margin-top:6px}details.feedback-answer summary{font-size
 h2.set-heading{font-size:20px;margin:26px 0 6px;color:var(--accent,#7a3b4e)}
 p.small{font-size:13px}
 @media print{.word-row .meaning{filter:none}}
+/* Print layout (2026-10-24): a numbered passage prints one source line per printed line (homework.js measures it
+   before printing), table words stay whole, a question stays with its writing space, and a passage breaks between lines. */
+.print-lines-measure>*{white-space:nowrap!important;font-size:var(--print-measure-size,12px)!important}
+@media print{@supports (font-size:1cqi){.print-lines-fit{container-type:inline-size}.print-lines-fit>*{white-space:nowrap!important;font-size:max(7pt,min(1em,calc(98cqi / var(--print-line-em))))!important}}th,td{overflow-wrap:break-word!important;word-break:normal!important}.card.passage{break-inside:auto}.task-section>summary{break-after:avoid}}

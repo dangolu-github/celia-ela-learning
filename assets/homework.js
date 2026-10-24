@@ -61,7 +61,7 @@
     if(a.intro)head.append(el('p',a.intro,'lead'));
     if(a.instructions&&a.instructions.length){const guide=toggleSection('Instructions','instructions','work-instructions');const ul=el('ul');a.instructions.forEach(t=>ul.append(el('li',t)));guide.append(ul);head.append(guide);}
     if(a.passage){const wrap=toggleSection(a.passage.title,'passage','task-section');const sec=el('section',null,'card passage');if(a.passage.author)sec.append(el('p',a.passage.author,'muted'));
-      if(a.passage.lines)a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));sec.append(row);});
+      if(a.passage.lines){const block=el('div',null,'poem-lines');block.dataset.printLines='';a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));block.append(row);});sec.append(block);}
       else(a.passage.paragraphs||[]).forEach(t=>sec.append(el('p',t)));wrap.append(sec);form.append(wrap);}
     // Word help (2026-10-22): a fixed two-column list. Each meaning is already in place but blurred; tapping a word reveals it
     // without moving anything else (the first version expanded chips and reflowed the list).
@@ -236,6 +236,15 @@
   const focusBtn=$('focus-mode');if(focusBtn)focusBtn.addEventListener('click',()=>{const on=document.body.classList.toggle('focus');focusBtn.textContent=on?'Leave focus mode':'Focus mode';});
   window.addEventListener('celia-login',()=>{authEpoch++;load();});
   window.addEventListener('celia-logout',()=>{authEpoch++;ready=false;submitted=false;submitting=false;dirty=false;clearTimeout(timer);clearMarks();clearErrors();freeze(false);conflict.hidden=true;resolve.hidden=true;form.replaceChildren();head.replaceChildren();rendered=false;hasDeviceWork=false;hasLocalDraft=false;localMeta=null;say('Signed out. Your local draft is preserved.');});
-  const printOpen=[];window.addEventListener('beforeprint',()=>{document.querySelectorAll('[data-section-key]').forEach(d=>{printOpen.push([d,d.open]);d.open=true;});form.querySelectorAll('textarea').forEach(autosize);});window.addEventListener('afterprint',()=>{printOpen.splice(0).forEach(([d,open])=>{d.open=open;});});
+  // Print: a passage with numbered lines prints one source line per printed line (2026-10-24). Its widest line is
+  // measured in em near the printed size (system fonts space letters differently at 16px and 9pt): first at 12px, then at
+  // the size that width gives on A4. site.css then shrinks that passage, not the page, never below 7pt.
+  const printOpen=[],lineFits=[];
+  function fitPrintLines(){form.querySelectorAll('[data-print-lines]').forEach(block=>{const lines=Array.from(block.children);if(!lines.length)return;block.classList.add('print-lines-measure');
+    const widestAt=px=>{block.style.setProperty('--print-measure-size',px+'px');return Math.max(...lines.map(line=>{const r=document.createRange();r.selectNodeContents(line);return r.getBoundingClientRect().width/px;}));};
+    let em=widestAt(12);if(em>0)em=Math.max(em,widestAt(Math.min(13.6,685/em)));block.classList.remove('print-lines-measure');block.style.removeProperty('--print-measure-size');
+    if(em>0&&em<=72){block.style.setProperty('--print-line-em',em.toFixed(2));block.classList.add('print-lines-fit');lineFits.push(block);}});}   // above 72em even 7pt overflows A4: it keeps wrapping
+  window.addEventListener('beforeprint',()=>{document.querySelectorAll('[data-section-key]').forEach(d=>{printOpen.push([d,d.open]);d.open=true;});form.querySelectorAll('textarea').forEach(autosize);fitPrintLines();});
+  window.addEventListener('afterprint',()=>{printOpen.splice(0).forEach(([d,open])=>{d.open=open;});lineFits.splice(0).forEach(b=>{b.classList.remove('print-lines-fit');b.style.removeProperty('--print-line-em');});});
   window.addEventListener('online',sync);load();
 })();
