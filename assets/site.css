@@ -58,3 +58,6 @@ p.small{font-size:13px}
    before printing), table words stay whole, a question stays with its writing space, and a passage breaks between lines. */
 .print-lines-measure>*{white-space:nowrap!important;font-size:var(--print-measure-size,12px)!important}
 @media print{@supports (font-size:1cqi){.print-lines-fit{container-type:inline-size}.print-lines-fit>*{white-space:nowrap!important;font-size:max(7pt,min(1em,calc(98cqi / var(--print-line-em))))!important}}th,td{overflow-wrap:break-word!important;word-break:normal!important}.card.passage{break-inside:auto}.task-section>summary{break-after:avoid}}
+
+/* Submit that ended without a receipt (2026-10-29) */
+.submit-notice{font:14px/1.5 Arial,sans-serif;margin-top:8px;padding:8px 12px;border:2px solid var(--bad);border-radius:8px;background:#fbecea;color:var(--bad)}.submit-notice p{margin:4px 0;color:var(--ink)}.submit-notice .zh,#draft-conflict .zh,#submission-result .zh{font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif}

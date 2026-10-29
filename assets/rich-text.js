@@ -18,6 +18,9 @@
   }
   const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function fromPlain(t){return String(t||'').split(/\n\s*\n/).filter(p=>p.trim()).map(p=>'<p>'+esc(p).replace(/\n/g,'<br>')+'</p>').join('');}
+  // Caret as a character count, so rewriting the content (e.g. after a cloud save) leaves it where the writer was typing (2026-10-29).
+  function caretAt(area){const s=window.getSelection&&getSelection();if(!s||!s.rangeCount||!area.contains(s.focusNode))return -1;const r=document.createRange();r.selectNodeContents(area);r.setEnd(s.focusNode,s.focusOffset);return r.toString().length;}
+  function placeCaret(area,n){const walk=document.createTreeWalker(area,NodeFilter.SHOW_TEXT);let node,last=null;while((node=walk.nextNode())){last=node;if(n<=node.length)break;n-=node.length;}const r=document.createRange();if(node)r.setStart(node,n);else if(last)r.setStart(last,last.length);else{r.selectNodeContents(area);r.collapse(false);}r.collapse(true);const s=getSelection();s.removeAllRanges();s.addRange(r);}
   const BUTTONS=[['Bold (Ctrl/Cmd+B)','bold','B','rt-b'],['Italic (Ctrl/Cmd+I)','italic','I','rt-i'],['Underline (Ctrl/Cmd+U)','underline','U','rt-u'],['Heading','formatBlock:<h2>','Heading',''],['Subheading','formatBlock:<h3>','Sub',''],['Normal paragraph','formatBlock:<p>','¶',''],['Bulleted list','insertUnorderedList','• List',''],['Numbered list','insertOrderedList','1. List',''],['Quotation','formatBlock:<blockquote>','“ Quote',''],['Clear formatting','removeFormat','Clear',''],['Undo','undo','Undo',''],['Redo','redo','Redo','']];
   function editor(container,{placeholder='',onInput=null,itemId=''}={}){
     const bar=document.createElement('div');bar.className='rt-toolbar';bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','Text formatting');
@@ -29,7 +32,7 @@
     container.append(bar,area);
     return {area,bar,
       getHtml:()=>sanitize(area.innerHTML),
-      setValue:v=>{area.innerHTML=isHtml(v)?sanitize(v):fromPlain(v);},
+      setValue:v=>{const at=document.activeElement===area?caretAt(area):-1;area.innerHTML=isHtml(v)?sanitize(v):fromPlain(v);if(at>=0)placeCaret(area,at);},
       getText:()=>text(sanitize(area.innerHTML)),
       setDisabled:v=>{area.contentEditable=v?'false':'true';area.classList.toggle('disabled',!!v);bar.querySelectorAll('button').forEach(b=>{b.disabled=!!v;});}};
   }

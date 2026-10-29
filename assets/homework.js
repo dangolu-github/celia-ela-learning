@@ -41,6 +41,12 @@
   const checklist=el('p','','submission-checklist');checklist.id='submission-checklist';toolbar.append(checklist);
   const validationSummary=el('div',null,'validation-summary');validationSummary.id='validation-summary';validationSummary.setAttribute('role','alert');validationSummary.hidden=true;toolbar.append(validationSummary);
   const exportArea=el('textarea');exportArea.id='draft-copy-text';exportArea.readOnly=true;exportArea.hidden=true;exportArea.setAttribute('aria-label','Copy of your work');toolbar.append(exportArea);
+  // A Submit that ends without a receipt always says so in the toolbar and in a dialog, in English and Chinese (2026-10-29).
+  const submitNotice=el('div',null,'submit-notice');submitNotice.id='submit-notice';submitNotice.setAttribute('role','alert');submitNotice.hidden=true;toolbar.append(submitNotice);
+  function clearRefusal(){submitNotice.hidden=true;submitNotice.replaceChildren();}
+  function refuse(en,zh,dialog=true){submitNotice.replaceChildren(el('strong','Not submitted · 没有交上'),el('p',en),el('p',zh,'zh'));submitNotice.hidden=false;say('Not submitted. '+en);if(dialog)try{window.alert('Not submitted · 没有交上\n\n'+en+'\n\n'+zh);}catch(_){}}
+  conflict.querySelector('p')?.append(el('span',' 这台设备上的版本和已保存的版本不一样。选一个继续写，两个版本都会保留。','zh'));
+  conflict.querySelectorAll('button').forEach(b=>b.append(el('span',b.dataset.draft==='local'?' · 用这台设备上的版本':' · 用已保存的版本','zh')));
   function canonical(raw){const out={};(a?a.items:[]).forEach(it=>{let v=(raw||{})[it.id];if(v==null)return;if(it.type==='short')v=clean(v).replace(/\n+/g,' ').trim();else if(it.type==='gaps')v=v.map(x=>clean(x).replace(/\n+/g,' ').trim());else if(it.type==='text')v=RT.isHtml(v)?RT.sanitize(clean(v)):RT.fromPlain(clean(v));else if(it.type==='table')v=v.map(row=>row.map(clean)).filter(row=>row.some(x=>x.trim()));if(v!==''&&(!Array.isArray(v)||v.length))out[it.id]=v;});return out;}
   const same=(x,y)=>JSON.stringify(canonical(x))===JSON.stringify(canonical(y));
   function backup(value,reason){const copy={reason,at:new Date().toISOString(),attempt,...value};try{const key=storageKey+'-backup-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);localStorage.setItem(key,JSON.stringify(copy));return true;}catch(_){memoryCopies.push(copy);say('A safety copy could not be saved. Download a copy before choosing another draft.');return false;}}
@@ -113,7 +119,7 @@
   });return out;}
   function restore(r,useSeed=false){r=r||{};a.items.forEach(it=>{const v=r[it.id];
     if(it.type==='choice')form.querySelectorAll('input[name="'+it.id+'"]').forEach(x=>{x.checked=x.value===v;});
-    else if(it.type==='text'){const ed=editors[it.id];if(ed)ed.setValue(v||'');}
+    else if(it.type==='text'){const ed=editors[it.id],want=RT.isHtml(v)?RT.sanitize(v):RT.fromPlain(v||'');if(ed&&ed.getHtml()!==want)ed.setValue(v||'');}   // unchanged text is not rewritten, so the caret stays put
     else if(it.type==='short'){const t=form.querySelector('[data-item="'+it.id+'"]');if(t)t.value=v||'';}
     else if(it.type==='gaps'){form.querySelectorAll('[data-gaps="'+it.id+'"] input').forEach((x,i)=>{x.value=Array.isArray(v)&&v[i]?v[i]:'';});}
     else if(it.type==='table'){const box=form.querySelector('[data-table="'+it.id+'"]');if(box)renderRows(box,it,Array.isArray(v)?v:(useSeed?it.seedRows||[]:[]));}
@@ -147,7 +153,7 @@
     attempt=st.attempt;lastReceipt=st.receipt;submitted=true;ready=false;dirty=false;clearTimeout(timer);restore(st.receipt.responses);freeze(true);conflict.hidden=true;resolve.hidden=true;clearErrors();clearMarks();result.hidden=false;
     const g=st.receipt.grade;
     result.append(el('h2','Submitted · attempt '+st.attempt+(g?' · '+g.score+' / '+g.total:'')));
-    result.append(el('p','Received '+fmt(st.receipt.receivedAt)+'. Your work is saved exactly as you handed it in.'));
+    result.append(el('p','Received '+fmt(st.receipt.receivedAt)+'. Your work is saved exactly as you handed it in.'),el('p','已交上。','zh'));
     if(g){result.append(el('p','Questions: '+g.score+' of '+g.total+' correct. Open “Show answer and explanation” under each question to check.'));answerMarks(st.receipt);}
     else if(st.receipt.answersPending)result.append(el('p','Your answers are recorded. The results will appear here when your teacher releases them.'));
     if(st.feedback){feedbackSummary(st.feedback,result);feedbackBlocks(st.feedback);}
@@ -216,18 +222,32 @@
   });
   document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();clearTimeout(timer);sync();}});
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty){clearTimeout(timer);sync();}});
+  // Another page saved a different draft and the learner wants to hand in what is on this screen: keep both copies on
+  // this device, make the screen text the saved draft, then hand it in (2026-10-29; before, Submit stopped silently).
+  function handInScreen(){
+    if(!window.confirm('Another page saved a different version of this homework.\n另一个页面保存了不同的版本。\n\nHand in the text on this screen? Both versions stay in “Download a copy”.\n要交现在屏幕上的这一版吗？两个版本都可以用 “Download a copy” 下载。')){refuse('You chose not to hand in this version. Choose a draft above, then press Submit again.','你选择了先不交这一版。请在上面选一个版本，再点一次 Submit。',false);if(conflictData)resolve.click();return false;}
+    if(!backup({local:responses(),server:conflictData.server},'Hand in the text on this screen')){refuse('The other version could not be kept on this device. Press “Download a copy” first, then press Submit again.','另一个版本无法保存在这台设备上。请先点 “Download a copy”，再点一次 Submit。');return false;}
+    persist();conflict.hidden=true;resolve.hidden=true;conflictData=null;ready=true;dirty=true;return true;
+  }
   submit.addEventListener('click',async()=>{
-    if(submitting||submitted)return;
-    if(!CeliaAPI.signedIn()){say('Please enter the website password before submitting.');document.querySelector('#account-panel input').focus();return;}
-    if(!ready){say(conflictData?'Choose a draft above before submitting. Both copies are available to download.':'Load your saved work before submitting.');if(conflictData)resolve.click();return;}
+    if(submitting||submitted)return;clearRefusal();
+    if(!CeliaAPI.signedIn()){refuse('Enter the website password first, then press Submit again.','请先输入网站密码，再点一次 Submit。');document.querySelector('#account-panel input').focus();return;}
+    if(!ready&&!conflictData){refuse('Your saved work is still loading. Wait a moment, then press Submit again.','作业还在加载，请稍等，再点一次 Submit。');return;}
     const errors=validate(true);if(errors.length){showErrors(errors,true);say('Please check the marked parts. Your text has not been submitted.');return;}
-    if(!window.confirm('Hand in this work now? After submitting you cannot change it unless your teacher opens a revision.'))return;
-    persist();freeze(true);clearTimeout(timer);if(savePromise)await savePromise;if(dirty&&ready&&!submitted)await sync();if(!ready||submitted){if(!submitted)freeze(false);return;}
+    if(conflictData?!handInScreen():!window.confirm('Hand in this work now? After submitting you cannot change it unless your teacher opens a revision.'))return;
+    persist();freeze(true);clearTimeout(timer);
+    for(let tries=0;tries<3;tries++){   // the save made before handing in can still meet a draft saved on another page
+      if(savePromise)await savePromise;if(dirty&&ready&&!submitted)await sync();
+      if(submitted||!conflictData)break;
+      freeze(false);if(!handInScreen())return;freeze(true);
+    }
+    if(submitted)return;
+    if(!ready){freeze(false);refuse('Your work could not be saved before handing in. Check your connection, then press Submit again.','交之前没能保存作业。请检查网络，再点一次 Submit。');return;}
     if(pendingId&&pendingAttempt!==attempt){backup({requestId:pendingId,requestAttempt:pendingAttempt},'Earlier submission request');pendingId='';}
     if(!pendingId){pendingId=crypto.randomUUID();pendingAttempt=attempt;try{localStorage.setItem(storageKey+'-submit-request',pendingId);localStorage.setItem(storageKey+'-submit-attempt',String(attempt));}catch(_){}}
     const snapshot=responses(),generation=authEpoch,elapsedSeconds=startedAt?Math.max(0,Math.round((Date.now()-Date.parse(startedAt))/1000)):null;submitting=true;say('Submitting… Please keep this page open.');
-    try{const submissionOrigin=await originForSubmit();const data=await CeliaAPI.call('submit',{assignmentId,responses:snapshot,requestId:pendingId,elapsedSeconds,submissionOrigin,attempt,baseRevision:revision});if(generation!==authEpoch||!CeliaAPI.signedIn())return;clearPending();displayState(data.state);if(data.replayed&&data.currentAttempt>data.state.attempt){submitting=false;await load();say('Your earlier submission is confirmed. A new revision is open below.');}}
-    catch(e){if(generation===authEpoch){freeze(false);if(e.transport){say('Checking whether your submission arrived…');try{const st=await CeliaAPI.call('state',{assignmentId});if(st.submitted){clearPending();displayState(st);}else{say(localNotice()+' No receipt is confirmed yet. Submit again when your connection is ready.');}}catch(_){say(localNotice()+' Receipt could not be checked. Keep this page open or download a copy; try Submit again when connected.');}}else if(e.code==='DRAFT_CONFLICT'||e.code==='ATTEMPT_CHANGED'){submitting=false;await load();if(!conflictData)say('The saved work changed. Review the current draft before submitting.');}else handleError(e);}}
+    try{const submissionOrigin=await originForSubmit();const data=await CeliaAPI.call('submit',{assignmentId,responses:snapshot,requestId:pendingId,elapsedSeconds,submissionOrigin,attempt,baseRevision:revision});if(generation!==authEpoch||!CeliaAPI.signedIn())return;clearPending();displayState(data.state);result.scrollIntoView?.({block:'center'});if(data.replayed&&data.currentAttempt>data.state.attempt){submitting=false;await load();say('Your earlier submission is confirmed. A new revision is open below.');}}
+    catch(e){if(generation===authEpoch){freeze(false);if(e.transport){say('Checking whether your submission arrived…');try{const st=await CeliaAPI.call('state',{assignmentId});if(st.submitted){clearPending();displayState(st);result.scrollIntoView?.({block:'center'});}else{refuse(localNotice()+' No receipt is confirmed yet. Keep this page open and press Submit again when your connection is ready.','还没有收到回执。请保持页面打开，网络正常后再点一次 Submit。');}}catch(_){refuse(localNotice()+' Receipt could not be checked. Keep this page open or download a copy; press Submit again when connected.','连不上网站，查不到回执。请保持页面打开或先点 “Download a copy”，网络正常后再点一次 Submit。');}}else if(e.code==='DRAFT_CONFLICT'||e.code==='ATTEMPT_CHANGED'){submitting=false;await load();refuse('Your saved work changed on another page. Press Submit again to choose which version to hand in.','作业在另一个页面被改过。请再点一次 Submit，选择要交的版本。');}else{handleError(e);refuse(errorMessage(e),'请按提示修改，再点一次 Submit。');}}}
     finally{submitting=false;}
   });
   function clearPending(){pendingId='';pendingAttempt=null;try{localStorage.removeItem(storageKey+'-submit-request');localStorage.removeItem(storageKey+'-submit-attempt');}catch(_){}}
