@@ -33,14 +33,14 @@ details.feedback-answer{margin-top:6px}details.feedback-answer summary{font-size
 @media print{.rt-toolbar{display:none}.rt-area.essay{border:1px solid #999;border-radius:6px}.gaps input.gap{border-bottom:1px solid #333}}
 
 /* Homework controls stay with the learner while long tables are open. */
-.work-toolbar{position:sticky;top:0;z-index:30;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 16px;box-shadow:0 3px 12px #2a25210c;margin:20px 0}
-.work-toolbar #save-status{margin:0 0 6px;min-height:0;color:var(--ink);font-weight:600}.work-toolbar .actions{margin:0;gap:8px}.work-toolbar .submission-checklist{margin:7px 0 0;color:var(--muted);font:13px/1.5 Arial,sans-serif}.work-toolbar button{padding:8px 12px;font-size:14px}
+.work-toolbar{position:sticky;top:0;z-index:30;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:8px 14px;box-shadow:0 3px 12px #2a25210c;margin:20px 0}
+.work-toolbar .toolbar-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}.work-toolbar #save-status{flex:1 1 220px;min-width:0;margin:0;min-height:0;color:var(--ink);font:600 13px/1.4 Arial,sans-serif}.work-toolbar .actions{flex:none;margin:0;gap:8px}.work-toolbar button{padding:8px 12px;font-size:14px}.work-toolbar button.submission-checklist{flex:none;background:var(--accent-soft);color:var(--accent);border-radius:14px;padding:4px 11px;font:600 13px/1.4 Arial,sans-serif}
 .work-more-actions{margin-left:auto;position:relative}.work-more-actions>summary{padding:7px;font-size:13px}.work-more-actions .more-actions{position:absolute;right:0;top:100%;min-width:210px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 5px 15px #2a25211a;display:grid;gap:8px}.work-more-actions .section-actions{display:flex;gap:16px;padding:0 2px}
 .task-section,.work-instructions{margin:16px 0;border:1px solid var(--line);border-radius:10px;background:#fff}.task-section>summary,.work-instructions>summary{padding:14px 18px;font-size:16px;color:var(--ink)}.work-instructions>ul{margin:0 20px 18px;padding-left:20px}.task-section>article,.task-section>section.card{margin:0;border:0;border-top:1px solid var(--line);border-radius:0 0 10px 10px}.task-section label{display:block}.task-section .item>label{font:700 15px/1.5 Arial,sans-serif}.task-section .item>label input{margin-top:8px}
 .table-row-group{margin:10px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}.table-row-group>summary{padding:10px 12px}.table-row-group .table-row{border:0;border-top:1px solid var(--line);margin:0;border-radius:0}.cell-space{display:block;color:var(--muted);font:11px/1.5 Arial,sans-serif;margin-top:4px}.cell-space.over-limit,.field-error{color:var(--bad)}
-.field-error{font:600 13px/1.5 Arial,sans-serif;margin:6px 0}.validation-summary{font:14px/1.5 Arial,sans-serif;border-top:1px solid var(--line);margin-top:8px;padding-top:8px;max-height:150px;overflow:auto}.validation-summary ul{margin:4px 0;padding-left:18px}.work-toolbar button.error-link{padding:0;background:none;color:var(--bad);font-weight:400;text-align:left;text-decoration:underline}.item [aria-invalid=true]{border:2px solid var(--bad)!important}.item input,.item textarea,.rt-area{scroll-margin-top:240px}.theme-options{display:grid;gap:8px;margin-top:10px}.theme-options button{white-space:normal;text-align:left;font-weight:400;overflow-wrap:anywhere}
+.field-error{font:600 13px/1.5 Arial,sans-serif;margin:6px 0}.validation-summary{font:14px/1.5 Arial,sans-serif;border-top:1px solid var(--line);margin-top:8px;padding-top:8px;max-height:150px;overflow:auto}.validation-summary ul{margin:4px 0;padding-left:18px}.work-toolbar button.error-link{padding:0;background:none;color:var(--bad);font-weight:400;text-align:left;text-decoration:underline}.item [aria-invalid=true]{border:2px solid var(--bad)!important}.item input,.item textarea,.rt-area{scroll-margin-top:130px}.theme-options{display:grid;gap:8px;margin-top:10px}.theme-options button{white-space:normal;text-align:left;font-weight:400;overflow-wrap:anywhere}
 #draft-copy-text{width:100%;max-height:260px;min-height:140px;font:14px/1.5 monospace;padding:10px;margin-top:12px}.draft-times{overflow-wrap:anywhere}
-@media(max-width:600px){.work-toolbar{margin:12px -4px;padding:9px 10px;border-radius:0 0 8px 8px}.work-toolbar #save-status{font-size:13px;line-height:1.4}.work-toolbar .actions{gap:6px}.work-toolbar button{font-size:12px;padding:8px 10px}.work-toolbar .submission-checklist{font-size:12px;line-height:1.4}.work-more-actions>summary{font-size:12px;padding:7px 3px}.task-section>summary{font-size:15px;padding:12px}.validation-summary{max-height:120px}.table-input .table-row{grid-template-columns:minmax(0,1fr)}.table-row-group>summary{overflow-wrap:anywhere}.item input,.item textarea,.rt-area{scroll-margin-top:260px}}
+@media(max-width:600px){.work-toolbar{margin:12px -4px;padding:7px 10px;border-radius:0 0 8px 8px}.work-toolbar #save-status{flex:1 1 0;font-size:12px;line-height:1.35}.work-toolbar .actions{flex:1 1 100%;gap:6px}.work-toolbar button{font-size:12px;padding:8px 10px}.work-toolbar button.submission-checklist{font-size:12px;padding:3px 9px}.work-toolbar .wide-only{display:none}.work-more-actions>summary{font-size:12px;padding:7px 3px}.task-section>summary{font-size:15px;padding:12px}.validation-summary{max-height:120px}.table-input .table-row{grid-template-columns:minmax(0,1fr)}.table-row-group>summary{overflow-wrap:anywhere}.item input,.item textarea,.rt-area{scroll-margin-top:150px}}
 @media print{.work-toolbar{display:none!important}.task-section,.work-instructions{break-inside:auto;border:0}.task-section>summary,.work-instructions>summary{padding:8px 0;font-weight:bold}.task-section>article{padding:8px 0;border:0}.table-row-group{break-inside:avoid}.cell-space{display:none}}
 /* Word help and practice headings (2026-10-22, Class 02 release; v2: no layout shift when a word is opened) */
 .word-help .word-list{display:grid;gap:6px;padding:6px 0 8px}
@@ -61,3 +61,38 @@ p.small{font-size:13px}
 
 /* Submit that ended without a receipt (2026-10-29) */
 .submit-notice{font:14px/1.5 Arial,sans-serif;margin-top:8px;padding:8px 12px;border:2px solid var(--bad);border-radius:8px;background:#fbecea;color:var(--bad)}.submit-notice p{margin:4px 0;color:var(--ink)}.submit-notice .zh,#draft-conflict .zh,#submission-result .zh{font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif}
+
+/* Question folds, evidence lines and the footer account line (2026-10-30): a fold shows the question number, the start of
+   the question and a tick once answered; the evidence line sits inside its question's card; signed in, the account
+   panel is one small line in the footer. */
+.task-section>summary .sum{display:inline-flex;align-items:baseline;gap:10px;max-width:calc(100% - 1.3em);vertical-align:top}
+.sum-label{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sum-stem{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400;color:var(--muted)}
+.sum-req{flex:none;font-size:12px;font-weight:400;color:var(--muted)}.sum-done{display:none;flex:none;color:var(--good);font-weight:700}.task-section.is-done .sum-done{display:inline}.task-section.is-done .sum-req{display:none}
+.evidence-item{margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}
+#account-panel.account-compact{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;background:none;border:0;border-radius:0;padding:0;margin:0 0 6px;font:13px/1.5 Arial,sans-serif;color:var(--muted)}#account-panel.account-compact p{margin:0}#account-panel.account-compact button{background:none;color:var(--accent);padding:0;font:600 13px/1.5 Arial,sans-serif;text-decoration:underline}
+/* Reading layout (2026-10-29): passage in a left pane, questions in a right pane, each scrolling on its own while
+   the page stays still; phones stack them, passage on top. Print stays one column with every fold open. */
+.reading-pane .passage-title{font-size:20px;margin:0 0 6px}.passage-intro{font:15px/1.6 Arial,sans-serif;color:var(--muted);margin:10px 0}.reading-pane .passage-author{margin:0 0 10px}
+@media screen{
+body.reading-layout{height:100vh;height:100dvh;overflow:hidden}
+body.reading-layout main{max-width:1560px;height:100%;display:flex;flex-direction:column;padding:14px 24px}
+body.reading-layout main>nav{flex:none;margin-bottom:6px}body.reading-layout #assignment-head{flex:none}body.reading-layout #assignment-head .eyebrow{margin:0}
+body.reading-layout #assignment-head h1{font-size:24px;margin:2px 0 4px}body.reading-layout #assignment-head .notice{margin:6px 0;padding:8px 14px;font-size:15px}
+body.reading-layout .work-toolbar{position:static;flex:none;margin:6px 0 12px;box-shadow:none}
+body.reading-layout .reading-split{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr);gap:20px}
+.reading-split>.reading-pane,.reading-split>.question-pane{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.reading-split>.reading-pane{background:#fff;border:1px solid var(--line);border-radius:12px;padding:0 22px 22px}.reading-split>.question-pane{padding:0 6px 20px 2px}
+.reading-split .passage-title{position:sticky;top:0;z-index:1;margin:0 -22px 4px;padding:12px 22px 10px;background:#fff;border-bottom:1px solid var(--line)}
+.question-pane>.question-top>.work-instructions:first-child{margin-top:0}.question-pane footer{margin-top:30px}
+body.reading-layout .item input,body.reading-layout .item textarea,body.reading-layout .rt-area{scroll-margin-top:16px}
+body.focus.reading-layout .reading-split{grid-template-columns:minmax(0,1fr)}
+}
+@media screen and (max-width:767px){
+body.reading-layout main{padding:8px 10px}body.reading-layout main>nav{gap:4px 14px;font-size:13px;margin-bottom:2px}
+body.reading-layout #assignment-head .eyebrow{display:none}body.reading-layout #assignment-head h1{font-size:18px;margin:0 0 2px}body.reading-layout .work-toolbar{margin:4px 0 8px}
+body.reading-layout .reading-split{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,45fr) minmax(0,55fr);gap:10px}
+.reading-split>.reading-pane{padding:0 14px 16px}.reading-split .passage-title{margin:0 -14px 4px;padding:8px 14px;font-size:17px}.reading-pane .poem-lines{font-size:16px}
+body.reading-layout.typing .reading-split{grid-template-rows:minmax(0,22fr) minmax(0,78fr)}
+body.focus.reading-layout .reading-split{grid-template-rows:minmax(0,1fr)}
+}
+@media print{.reading-pane{break-inside:auto;margin-bottom:12pt}.reading-pane .passage-title{font-size:15pt}.task-section>summary :is(.sum-stem,.sum-req,.sum-done){display:none}h2.set-heading{break-after:avoid}}

@@ -9,7 +9,9 @@
   const hint=document.createElement('p');hint.className='muted';hint.textContent='Enter the website password once. This browser will remember your device.';login.prepend(hint);
   login.querySelector('button').textContent='Open website';
   const retry=document.createElement('button');retry.type='button';retry.textContent='Try again';retry.hidden=true;panel.append(retry);
-  function paint(){document.documentElement.classList.toggle('celia-site-locked',!authenticated);login.hidden=authenticated||!!token;logout.hidden=!authenticated;title.hidden=authenticated;retry.hidden=true;message.textContent=authenticated?'This device is remembered.':token?'Opening your website…':'Enter the website password to continue.';}
+  function paint(){document.documentElement.classList.toggle('celia-site-locked',!authenticated);login.hidden=authenticated||!!token;logout.hidden=!authenticated;title.hidden=authenticated;retry.hidden=true;message.textContent=authenticated?'This device is remembered.':token?'Opening your website…':'Enter the website password to continue.';place();}
+  // Signed in, the account line is small text in the page footer (2026-10-30); signed out, the sign-in panel is the page.
+  function place(){const main=document.querySelector('main'),foot=document.querySelector('footer'),compact=authenticated&&!!foot;panel.classList.toggle('account-compact',compact);if(compact){if(panel.parentElement!==foot)foot.prepend(panel);}else if(main&&panel.parentElement!==main)main.prepend(panel);}
   function forget(){token='';authenticated=false;try{localStorage.removeItem(key);}catch(_){}paint();window.dispatchEvent(new Event('celia-logout'));}
   function accept(result){token=result.token;authenticated=true;let saved=true;try{localStorage.setItem(key,token);}catch(_){saved=false;}paint();if(!saved)message.textContent='Website open. Allow browser storage to remember this device next time.';window.dispatchEvent(new Event('celia-login'));}
   async function api(action,payload={}){

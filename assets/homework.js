@@ -31,19 +31,32 @@
   let sectionState={};const memoryCopies=[];try{sectionState=JSON.parse(localStorage.getItem(sectionKey)||'{}')||{};}catch(_){}
   function toggleSection(title,key,cls){const d=el('details',null,cls);d.dataset.sectionKey=key;d.open=sectionState[key]===true;d.append(el('summary',title));d.addEventListener('toggle',()=>{sectionState[key]=d.open;try{localStorage.setItem(sectionKey,JSON.stringify(sectionState));}catch(_){}});return d;}
   function reveal(target){if(!target)return;for(let p=target.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;target.focus();}
+  // The toolbar is one row (2026-10-30): save status, a short progress count and the buttons; phones put the buttons on a
+  // second row. The full list of missing parts appears only when Submit is pressed (validation summary under the row).
   const toolbar=el('section',null,'work-toolbar screen-only');toolbar.id='work-toolbar';toolbar.setAttribute('aria-label','Save and submit');
-  const actions=submit.parentElement;form.before(toolbar);toolbar.append(status,actions);
-  const download=el('button','Download a copy','secondary');download.type='button';download.id='download-draft';actions.append(download);
+  const toolbarRow=el('div',null,'toolbar-row'),actions=submit.parentElement;form.before(toolbar);toolbar.append(toolbarRow);
+  const download=el('button','Download','secondary');download.append(el('span',' a copy','wide-only'));download.type='button';download.id='download-draft';actions.append(download);   // phones show the short label
   const resolve=el('button','Choose a draft','secondary');resolve.type='button';resolve.id='resolve-draft';resolve.hidden=true;actions.append(resolve);
   resolve.addEventListener('click',()=>{conflict.scrollIntoView?.({block:'center'});reveal(conflict.querySelector('button'));});
   const sectionActions=el('div',null,'section-actions');[['Open all','open-work-sections',true],['Close all','close-work-sections',false]].forEach(([title,id,value])=>{const b=el('button',title,'small-button');b.id=id;b.type='button';b.addEventListener('click',()=>document.querySelectorAll('[data-section-key]').forEach(d=>{d.open=value;}));sectionActions.append(b);});toolbar.append(sectionActions);
-  const more=el('details',null,'work-more-actions');more.append(el('summary','More options'));const moreBody=el('div',null,'more-actions');[...actions.children].filter(x=>x!==submit&&x!==download&&x!==resolve).forEach(x=>moreBody.append(x));moreBody.append(sectionActions);more.append(moreBody);actions.append(more);
-  const checklist=el('p','','submission-checklist');checklist.id='submission-checklist';toolbar.append(checklist);
+  const more=el('details',null,'work-more-actions'),moreLabel=el('summary','More');moreLabel.append(el('span',' options','wide-only'));more.append(moreLabel);const moreBody=el('div',null,'more-actions');[...actions.children].filter(x=>x!==submit&&x!==download&&x!==resolve).forEach(x=>moreBody.append(x));moreBody.append(sectionActions);more.append(moreBody);actions.append(more);
+  const checklist=el('button','','submission-checklist');checklist.type='button';checklist.id='submission-checklist';checklist.title='Go to the next part still needed';
+  checklist.addEventListener('click',()=>{const next=a&&!submitted&&missing()[0];if(next)reveal(fieldTarget({itemId:next.id}));});
+  toolbarRow.append(status,checklist,actions);
   const validationSummary=el('div',null,'validation-summary');validationSummary.id='validation-summary';validationSummary.setAttribute('role','alert');validationSummary.hidden=true;toolbar.append(validationSummary);
   const exportArea=el('textarea');exportArea.id='draft-copy-text';exportArea.readOnly=true;exportArea.hidden=true;exportArea.setAttribute('aria-label','Copy of your work');toolbar.append(exportArea);
   // A Submit that ends without a receipt always says so in the toolbar and in a dialog, in English and Chinese (2026-10-29).
   const submitNotice=el('div',null,'submit-notice');submitNotice.id='submit-notice';submitNotice.setAttribute('role','alert');submitNotice.hidden=true;toolbar.append(submitNotice);
   function clearRefusal(){submitNotice.hidden=true;submitNotice.replaceChildren();}
+  // Reading layout (2026-10-29): a task with a passage shows it in a left pane and the questions in a right pane, each
+  // scrolling on its own; phones stack them, passage on top. The passage is never a fold, so Close all leaves it open.
+  const readPane=el('section',null,'reading-pane passage');readPane.id='reading';readPane.setAttribute('aria-label','Reading passage');
+  const questionPane=el('div',null,'question-pane'),questionTop=el('div',null,'question-top');questionPane.id='question-pane';
+  const receiptNote=previous.previousElementSibling,pageEnd=[receiptNote&&receiptNote.tagName==='P'?receiptNote:null,previous,document.querySelector('main > footer')].filter(Boolean);let split=null;
+  // While she types an answer, phones give the question pane more room (site.css body.typing).
+  questionPane.addEventListener('focusin',e=>{if(e.target.matches('input[type=text],textarea,.rt-area'))document.body.classList.add('typing');});
+  questionPane.addEventListener('focusout',()=>document.body.classList.remove('typing'));
+  function readingLayout(on){document.body.classList.toggle('reading-layout',on);if(!on||split)return;split=el('div',null,'reading-split');toolbar.after(split);split.append(readPane,questionPane);questionPane.append(questionTop,revisionNote,result,conflict,form,...pageEnd);}
   function refuse(en,zh,dialog=true){submitNotice.replaceChildren(el('strong','Not submitted · 没有交上'),el('p',en),el('p',zh,'zh'));submitNotice.hidden=false;say('Not submitted. '+en);if(dialog)try{window.alert('Not submitted · 没有交上\n\n'+en+'\n\n'+zh);}catch(_){}}
   conflict.querySelector('p')?.append(el('span',' 这台设备上的版本和已保存的版本不一样。选一个继续写，两个版本都会保留。','zh'));
   conflict.querySelectorAll('button').forEach(b=>b.append(el('span',b.dataset.draft==='local'?' · 用这台设备上的版本':' · 用已保存的版本','zh')));
@@ -61,25 +74,36 @@
   function handleError(error){if(error.itemId||error.code==='RESPONSES_TOO_LARGE')showErrors([{...error,message:errorMessage(error)}],true);say(localNotice()+' '+errorMessage(error));}
 
   /* ---------- rendering ---------- */
+  // A question's fold shows its number, the start of the question, and a tick once it is answered (2026-10-30).
+  function itemSection(it){const d=toggleSection('',it.id,'task-section'),line=el('span',null,'sum');line.append(el('span',labelOf(it),'sum-label'));if(it.n&&it.stem)line.append(el('span',it.stem,'sum-stem'));
+    const req=requirement(it).replace(/[()]/g,'').trim();if(req)line.append(el('span',req,'sum-req'));line.append(el('span','✓','sum-done'));d.firstChild.replaceChildren(line);return d;}
+  // "Which line or lines support your answer to question N?" (id <question>L) sits inside question N's card, not in a fold of its own.
+  let evidenceOf={};
+  function evidenceParent(it){const m=/^(.+-Q\d+)L$/.exec(it.id),parent=m&&itemById(m[1]);return it.type==='short'&&parent&&parent.type==='choice'?parent:null;}
   function renderAssignment(){
-    head.replaceChildren();form.replaceChildren();Object.keys(editors).forEach(k=>delete editors[k]);
+    head.replaceChildren();form.replaceChildren();readPane.replaceChildren();questionTop.replaceChildren();Object.keys(editors).forEach(k=>delete editors[k]);evidenceOf={};
+    const reading=!!a.passage;readingLayout(reading);
     head.append(el('p',a.practice?a.classLabel:a.classLabel+' · '+(a.kind==='notebook'?'Notebook':'Homework'),'eyebrow'),el('h1',a.title));
-    if(a.intro)head.append(el('p',a.intro,'lead'));
-    if(a.instructions&&a.instructions.length){const guide=toggleSection('Instructions','instructions','work-instructions');const ul=el('ul');a.instructions.forEach(t=>ul.append(el('li',t)));guide.append(ul);head.append(guide);}
-    if(a.passage){const wrap=toggleSection(a.passage.title,'passage','task-section');const sec=el('section',null,'card passage');if(a.passage.author)sec.append(el('p',a.passage.author,'muted'));
-      if(a.passage.lines){const block=el('div',null,'poem-lines');block.dataset.printLines='';a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));block.append(row);});sec.append(block);}
-      else(a.passage.paragraphs||[]).forEach(t=>sec.append(el('p',t)));wrap.append(sec);form.append(wrap);}
+    if(reading)readPane.append(el('h2',a.passage.title,'passage-title'));
+    if(a.intro)(reading?readPane:head).append(el('p',a.intro,reading?'passage-intro':'lead'));
+    if(a.instructions&&a.instructions.length){const guide=toggleSection('Instructions','instructions','work-instructions');const ul=el('ul');a.instructions.forEach(t=>ul.append(el('li',t)));guide.append(ul);(reading?questionTop:head).append(guide);}
+    if(reading){if(a.passage.author)readPane.append(el('p',a.passage.author,'muted passage-author'));
+      if(a.passage.lines){const block=el('div',null,'poem-lines');block.dataset.printLines='';a.passage.lines.forEach((line,i)=>{const row=el('div',null,'poem-line');row.append(el('span',(i+1)%5===0?String(i+1):'','line-number'),el('span',line));block.append(row);});readPane.append(block);}
+      else(a.passage.paragraphs||[]).forEach(t=>readPane.append(el('p',t)));}
     // Word help (2026-10-22): a fixed two-column list. Each meaning is already in place but blurred; tapping a word reveals it
     // without moving anything else (the first version expanded chips and reflowed the list).
     if(a.wordHelp&&a.wordHelp.length){const wrap=toggleSection('Word help · '+a.wordHelp.length+' words · tap a word to see its meaning','word-help','task-section word-help');const list=el('div',null,'word-list');
       a.wordHelp.forEach(w=>{const row=el('button',null,'word-row');row.type='button';row.setAttribute('aria-expanded','false');const t=el('span',null,'term');t.append(el('b',w.term));if(w.line)t.append(el('span',' · line '+w.line,'line'));const m=el('span',null,'meaning');const zh=el('span',w.meaning_zh,'zh');zh.lang='zh';m.append(zh);if(w.gloss_en)m.append(el('span',w.gloss_en,'gloss'));row.append(t,m);
         row.addEventListener('click',()=>{const on=row.getAttribute('aria-expanded')!=='true';row.setAttribute('aria-expanded',String(on));});list.append(row);});
       const all=el('button','Show all meanings','small-button');all.type='button';all.addEventListener('click',()=>{const rows=[...list.querySelectorAll('.word-row')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
-      wrap.append(list,all);form.append(wrap);}
-    let setHeading='';
+      wrap.append(list,all);(reading?readPane:form).append(wrap);}
+    let setHeading='';const cards={};
     a.items.forEach(it=>{
-      if(it.section&&it.section!==setHeading){setHeading=it.section;form.append(el('h2',it.section==='warm-up'?'Warm-up · quick checks':'Practice questions','set-heading'));}
-      const section=toggleSection(labelOf(it)+requirement(it),it.id,'task-section');const art=el('article',null,'item');art.dataset.itemId=it.id;section.append(art);
+      const parent=evidenceParent(it);let section=null,art;
+      if(parent&&cards[parent.id]){evidenceOf[parent.id]=it;art=el('div',null,'item evidence-item');cards[parent.id].append(art);}
+      else{if(it.section&&it.section!==setHeading){setHeading=it.section;form.append(el('h2',it.section==='warm-up'?'Warm-up · quick checks':'Practice questions','set-heading'));}
+        section=itemSection(it);art=el('article',null,'item');section.append(art);cards[it.id]=art;}
+      art.dataset.itemId=it.id;
       if(it.type==='choice'){
         const fs=el('fieldset');fs.append(el('legend',(it.n?'Question '+it.n+' · '+it.stem:it.label)+requirement(it)));const ol=el('ol',null,'options');
         it.options.forEach((o,i)=>{const li=el('li'),label=el('label'),input=el('input');input.type='radio';input.name=it.id;input.value='ABCDE'[i];label.append(input,document.createTextNode(input.value+'. '+o));li.append(label);ol.append(li);});
@@ -100,14 +124,20 @@
         if(it.hint)art.append(el('p',it.hint,'muted'));art.append(el('p','Each cell shows how much space is used. Your text is kept if a limit is reached; you can download a copy.','muted'));const box=el('div',null,'table-input');box.dataset.table=it.id;art.append(box);renderRows(box,it,it.seedRows||[]);
         const add=el('button','Add a row','small-button');add.type='button';add.dataset.addRow=it.id;art.append(add);
       }
-      form.append(section);
+      if(section)form.append(section);
     });
     updateCounts();
   }
   function rowEl(it,values,index){const group=toggleSection('Row '+(index+1)+(values[0]?' · '+values[0]:''),it.id+'-row-'+index,'table-row-group');const row=el('div',null,'table-row');it.columns.forEach((c,i)=>{const label=el('label');label.append(el('span',c,'col-label'));const t=el('textarea');t.rows=2;t.value=values[i]||'';t.dataset.min=56;t.dataset.tableItem=it.id;t.dataset.row=index;t.dataset.column=i;const meter=el('span','','cell-space');meter.id=it.id+'-'+index+'-'+i+'-space';t.setAttribute('aria-describedby',meter.id);label.append(t,meter);row.append(label);});group.append(row);group.addEventListener('toggle',()=>{if(group.open)row.querySelectorAll('textarea').forEach(autosize);});return group;}
   function renderRows(box,it,rows){box.replaceChildren();const n=Math.max(rows.length,it.minRows||1);for(let r=0;r<n;r++)box.append(rowEl(it,rows[r]||[],r));requestAnimationFrame(()=>box.querySelectorAll('textarea').forEach(autosize));}
   function itemById(id){return a.items.find(x=>x.id===id);}
-  function updateCounts(){form.querySelectorAll('[data-count-for]').forEach(c=>{const it=itemById(c.dataset.countFor),ed=editors[it.id];if(!ed)return;const t=ed.getText(),w=words(t),p=paras(t);let s=w+' word'+(w===1?'':'s')+' · '+p+' paragraph'+(p===1?'':'s');if(it.targetWords)s+=' · aim for '+it.targetWords[0]+'–'+it.targetWords[1]+' words';c.textContent=s;});form.querySelectorAll('[data-table-item]').forEach(t=>{const meter=$(t.dataset.tableItem+'-'+t.dataset.row+'-'+t.dataset.column+'-space');if(meter){const percent=Math.ceil(bytes(clean(t.value))/limits().tableCellBytes*100);meter.textContent='Cell space: '+percent+'% used';meter.classList.toggle('over-limit',percent>100);}});if(a){const gaps=missing();checklist.textContent=draftOnly?'Notebook: saved as a draft; no submission needed.':submitted?'Submission confirmed.':gaps.length?'Still needed: '+gaps.map(labelOf).join(' · '):(a.practice?'Ready. Submit to check your answers and see the explanations.':'Required parts complete. Submit homework when you are ready.');}}
+  function updateCounts(){form.querySelectorAll('[data-count-for]').forEach(c=>{const it=itemById(c.dataset.countFor),ed=editors[it.id];if(!ed)return;const t=ed.getText(),w=words(t),p=paras(t);let s=w+' word'+(w===1?'':'s')+' · '+p+' paragraph'+(p===1?'':'s');if(it.targetWords)s+=' · aim for '+it.targetWords[0]+'–'+it.targetWords[1]+' words';c.textContent=s;});form.querySelectorAll('[data-table-item]').forEach(t=>{const meter=$(t.dataset.tableItem+'-'+t.dataset.row+'-'+t.dataset.column+'-space');if(meter){const percent=Math.ceil(bytes(clean(t.value))/limits().tableCellBytes*100);meter.textContent='Cell space: '+percent+'% used';meter.classList.toggle('over-limit',percent>100);}});if(a)progress();}
+  // Progress counts question cards (a question and its evidence line are one card); a card is done when no part of it is still needed.
+  function progress(){const need=new Set(missing().map(it=>it.id)),r=responses(),inside=new Set(Object.values(evidenceOf).map(it=>it.id));let total=0,done=0;
+    a.items.filter(it=>!inside.has(it.id)).forEach(it=>{const ev=evidenceOf[it.id],open=need.has(it.id)||(ev&&need.has(ev.id));if(it.required||(ev&&ev.required)){total++;if(!open)done++;}
+      const d=form.querySelector('details.task-section[data-section-key="'+it.id+'"]');if(d)d.classList.toggle('is-done',r[it.id]!=null&&!open);});
+    checklist.hidden=draftOnly;
+    checklist.textContent=submitted?'Submitted ✓':need.size?done+' of '+total+' done':(a.practice?'Ready to check':'Ready to submit');}
 
   /* ---------- responses ---------- */
   function responses(){const out={};if(!a)return out;a.items.forEach(it=>{
@@ -135,9 +165,10 @@
   function answerMarks(receipt){
     if(!receipt.grade)return;
     receipt.grade.items.forEach(x=>{const art=form.querySelector('[data-item-id="'+x.itemId+'"]');if(!art)return;const it=itemById(x.itemId),ans=(receipt.answers||[]).find(y=>y.itemId===x.itemId);
-      art.append(el('p',x.correct?'Correct':'Your answer: '+yoursText(it,x)+' · Review this question','result-item '+(x.correct?'correct':'incorrect')));
+      const evidence=[...art.children].find(c=>c.classList.contains('evidence-item'))||null,put=n=>art.insertBefore(n,evidence);   // the mark sits under the options, above the evidence line
+      put(el('p',x.correct?'Correct':'Your answer: '+yoursText(it,x)+' · Review this question','result-item '+(x.correct?'correct':'incorrect')));
       if(ans&&ans.key!=null){const d=el('details',null,'feedback-answer');d.append(el('summary','Show answer and explanation'));const keyText=it.type==='choice'?ans.key+'. '+(it.options['ABCDE'.indexOf(ans.key)]||''):ans.key;const p=el('p');p.append(el('strong','Answer: '+keyText+'. '),document.createTextNode(ans.reason||''));
-        if(it.type==='short'&&ans.accepted&&ans.accepted.length>1)p.append(el('span',' Also accepted: '+ans.accepted.slice(1).join(' / '),'muted'));d.append(p);art.append(d);}});
+        if(it.type==='short'&&ans.accepted&&ans.accepted.length>1)p.append(el('span',' Also accepted: '+ans.accepted.slice(1).join(' / '),'muted'));d.append(p);put(d);}});
   }
   function feedbackBlocks(feedback){
     Object.keys(feedback.marked||{}).forEach(id=>{const art=form.querySelector('[data-item-id="'+id+'"]');if(!art)return;const d=el('div',null,'feedback-block');d.append(el('h3','Your teacher’s marked text'));const body=el('div');body.innerHTML=FB.markedHtml(feedback.marked[id]);d.append(body);art.append(d);});
@@ -255,12 +286,12 @@
   $('refresh-work').addEventListener('click',load);
   const focusBtn=$('focus-mode');if(focusBtn)focusBtn.addEventListener('click',()=>{const on=document.body.classList.toggle('focus');focusBtn.textContent=on?'Leave focus mode':'Focus mode';});
   window.addEventListener('celia-login',()=>{authEpoch++;load();});
-  window.addEventListener('celia-logout',()=>{authEpoch++;ready=false;submitted=false;submitting=false;dirty=false;clearTimeout(timer);clearMarks();clearErrors();freeze(false);conflict.hidden=true;resolve.hidden=true;form.replaceChildren();head.replaceChildren();rendered=false;hasDeviceWork=false;hasLocalDraft=false;localMeta=null;say('Signed out. Your local draft is preserved.');});
+  window.addEventListener('celia-logout',()=>{authEpoch++;ready=false;submitted=false;submitting=false;dirty=false;clearTimeout(timer);clearMarks();clearErrors();freeze(false);conflict.hidden=true;resolve.hidden=true;form.replaceChildren();head.replaceChildren();readPane.replaceChildren();questionTop.replaceChildren();readingLayout(false);rendered=false;hasDeviceWork=false;hasLocalDraft=false;localMeta=null;say('Signed out. Your local draft is preserved.');});
   // Print: a passage with numbered lines prints one source line per printed line (2026-10-24). Its widest line is
   // measured in em near the printed size (system fonts space letters differently at 16px and 9pt): first at 12px, then at
   // the size that width gives on A4. site.css then shrinks that passage, not the page, never below 7pt.
   const printOpen=[],lineFits=[];
-  function fitPrintLines(){form.querySelectorAll('[data-print-lines]').forEach(block=>{const lines=Array.from(block.children);if(!lines.length)return;block.classList.add('print-lines-measure');
+  function fitPrintLines(){document.querySelectorAll('[data-print-lines]').forEach(block=>{const lines=Array.from(block.children);if(!lines.length)return;block.classList.add('print-lines-measure');
     const widestAt=px=>{block.style.setProperty('--print-measure-size',px+'px');return Math.max(...lines.map(line=>{const r=document.createRange();r.selectNodeContents(line);return r.getBoundingClientRect().width/px;}));};
     let em=widestAt(12);if(em>0)em=Math.max(em,widestAt(Math.min(13.6,685/em)));block.classList.remove('print-lines-measure');block.style.removeProperty('--print-measure-size');
     if(em>0&&em<=72){block.style.setProperty('--print-line-em',em.toFixed(2));block.classList.add('print-lines-fit');lineFits.push(block);}});}   // above 72em even 7pt overflows A4: it keeps wrapping
