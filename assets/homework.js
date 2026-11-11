@@ -2,8 +2,9 @@
   'use strict';
   /* Generic learner runner for one registered assignment: rich-text writing, short answers, gap-fills, choices and note
      tables. Drafts save on this device at once and to the private service a moment later; a deliberate Submit creates
-     one immutable attempt. Keyed choices, keyed short answers and gaps are auto-scored at submission and the result,
-     answer and explanation appear at once unless the teacher has hidden them. Teacher-only submission origin
+     one immutable attempt. Keyed choices, keyed short answers and gaps are auto-scored at submission; the score and marks
+     appear at once, the answer and explanation unless the teacher has hidden them. A receipt marked held shows only the
+     waiting message. Teacher-only submission origin
      (submission-origin.js) is sent with Submit only. */
   const $=id=>document.getElementById(id);
   const form=$('homework');if(!form)return;
@@ -182,13 +183,16 @@
   function displayState(st){
     if(hasDeviceWork&&!same(responses(),st.receipt.responses)&&!backup({responses:responses()},'Device copy before showing the submission receipt')){lastReceipt=st.receipt;submitted=true;ready=false;dirty=false;clearTimeout(timer);freeze(true);clearMarks();result.hidden=false;result.append(el('h2','Submission received · attempt '+st.attempt),el('p','Received '+fmt(st.receipt.receivedAt)+'. Your different device draft is still shown below because a safety copy could not be saved. Download a copy now to keep both versions.'));say('Submission received. Different device text kept on screen — download both copies before leaving.');return;}
     attempt=st.attempt;lastReceipt=st.receipt;submitted=true;ready=false;dirty=false;clearTimeout(timer);restore(st.receipt.responses);freeze(true);conflict.hidden=true;resolve.hidden=true;clearErrors();clearMarks();result.hidden=false;
-    const g=st.receipt.grade;
+    const g=st.receipt.grade,held=!!st.receipt.held,shown=(st.receipt.answers||[]).length>0;
     result.append(el('h2','Submitted · attempt '+st.attempt+(g?' · '+g.score+' / '+g.total:'')));
     result.append(el('p','Received '+fmt(st.receipt.receivedAt)+'. Your work is saved exactly as you handed it in.'),el('p','已交上。','zh'));
-    if(g){result.append(el('p','Questions: '+g.score+' of '+g.total+' correct. Open “Show answer and explanation” under each question to check.'));answerMarks(st.receipt);}
+    // held (2026-11-11): the receipt has no score or marks yet; only the waiting message is shown.
+    if(held)result.append(el('p',st.receipt.heldMessage||'Submitted. Waiting for your teacher to review.','notice info'));
+    else if(g){result.append(el('p','Questions: '+g.score+' of '+g.total+' correct.'+(shown?' Open “Show answer and explanation” under each question to check.':' The answers and explanations will appear here when your teacher releases them.')));answerMarks(st.receipt);}
     else if(st.receipt.answersPending)result.append(el('p','Your answers are recorded. The results will appear here when your teacher releases them.'));
+    if(!held&&!st.feedback&&st.mode!=='teacher-checked'&&st.receipt.waitingForReview)result.append(el('p','Your written answers are waiting for your teacher to review.'));
     if(st.feedback){feedbackSummary(st.feedback,result);feedbackBlocks(st.feedback);}
-    else if(st.mode==='teacher-checked')result.append(el('p','Your teacher will read this and return feedback here.'));
+    else if(st.mode==='teacher-checked'&&!held)result.append(el('p','Your teacher will read this and return feedback here.'));
     renderPrevious(st.previous||[]);say('Submitted. Receipt received '+fmt(st.receipt.receivedAt)+'.');updateCounts();
   }
   function renderPrevious(list){
