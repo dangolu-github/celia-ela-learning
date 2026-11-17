@@ -69,6 +69,9 @@ button.idea-tap{cursor:pointer}button.idea-tap:hover{background:#fcfaf6}
 .idea-help .word-row{padding:7px 12px}.idea-help>.small-button{margin:0 14px 12px}
 @media(max-width:560px){.idea-groups{padding:4px 8px 10px}.idea-group{padding-left:8px}.idea-help>.small-button{margin:0 8px 12px}}
 @media print{.idea-tap .hidden-text{filter:none}.idea-help>.small-button{display:none}}
+/* Submit another version (2026-11-17): under the receipt of any homework still receiving work */
+.new-version{margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#e2dbd1)}.new-version p{margin:6px 0 0}.new-version .zh{font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif}
+@media print{.new-version{display:none}}
 /* Print layout (2026-10-24): a numbered passage prints one source line per printed line (homework.js measures it
    before printing), table words stay whole, a question stays with its writing space, and a passage breaks between lines. */
 .print-lines-measure>*{white-space:nowrap!important;font-size:var(--print-measure-size,12px)!important}

@@ -215,8 +215,14 @@
     if(!held&&!st.feedback&&st.mode!=='teacher-checked'&&st.receipt.waitingForReview)result.append(el('p','Your written answers are waiting for your teacher to review.'));
     if(st.feedback){feedbackSummary(st.feedback,result);feedbackBlocks(st.feedback);}
     else if(st.mode==='teacher-checked'&&!held)result.append(el('p','Your teacher will read this and return feedback here.'));
+    // Submit another version (2026-11-17): on every homework while it is receiving work.
+    if(!draftOnly&&st.control&&st.control.receiving){const box=el('div',null,'new-version'),again=el('button','Submit another version');again.type='button';again.id='new-version';again.addEventListener('click',()=>newVersion(st.attempt));
+      box.append(again,el('p','Change or add to your work and hand it in again. This version stays saved.','muted'),el('p','想修改或补充，可以再交一版；这一版会保留。','zh'));result.append(box);}
     renderPrevious(st.previous||[]);say('Submitted. Receipt received '+fmt(st.receipt.receivedAt)+'.');updateCounts();
   }
+  async function newVersion(from){const b=$('new-version');if(b)b.disabled=true;say('Opening a new version…');
+    try{await CeliaAPI.call('newVersion',{assignmentId,fromAttempt:from});submitted=false;await load();if(!submitted){const t=form.querySelector('.rt-area,textarea,input[type=text]');if(t)reveal(t);}}
+    catch(e){if(b)b.disabled=false;say(e.message);if(e.code==='ATTEMPT_CHANGED')await load();}}
   function renderPrevious(list){
     if(!list.length)return;previous.hidden=false;previous.append(el('h2','Earlier attempts'));
     list.forEach(p=>{const d=el('details',null,'card');d.append(el('summary','Attempt '+p.attempt+' · submitted '+fmt(p.receipt.receivedAt)));
@@ -228,8 +234,10 @@
       if(p.feedback)feedbackSummary(p.feedback,d);previous.append(d);});
   }
   function showRevision(st){
-    if(!st.revision)return;revisionNote.hidden=false;revisionNote.append(el('h2','Revision open'));
-    revisionNote.append(el('p','Your teacher has opened a revision'+(st.revision.note?': '+st.revision.note:'.')+' Your earlier attempt and its feedback are below. Edit your text here and submit it again when it is ready.'));
+    if(!st.revision)return;revisionNote.hidden=false;
+    if(st.revision.by==='learner')revisionNote.append(el('h2','Version '+st.attempt+' · not handed in yet'),el('p','Your last version is in the box below. Change or add to it, then submit again. Earlier versions and their feedback are further down.'),el('p','上一版已经放在框里，修改或补充后再提交。','zh'));
+    else{revisionNote.append(el('h2','Revision open'));
+    revisionNote.append(el('p','Your teacher has opened a revision'+(st.revision.note?': '+st.revision.note:'.')+' Your earlier attempt and its feedback are below. Edit your text here and submit it again when it is ready.'));}
     renderPrevious(st.previous||[]);
   }
 
