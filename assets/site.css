@@ -54,6 +54,21 @@ details.feedback-answer{margin-top:6px}details.feedback-answer summary{font-size
 h2.set-heading{font-size:20px;margin:26px 0 6px;color:var(--accent,#7a3b4e)}
 p.small{font-size:13px}
 @media print{.word-row .meaning{filter:none}}
+/* Writing ideas (2026-11-17): a fold inside the writing card, above the box; Chinese and technique names start blurred, a tap shows them in place */
+.task-section.idea-help{margin:8px 0 12px;background:#fffdf9}.idea-help>summary{padding:10px 14px;font-weight:700}
+.idea-groups{display:grid;gap:14px;padding:4px 14px 10px;min-width:0}
+.idea-group{display:grid;gap:6px;min-width:0;border-left:3px solid var(--line,#e2dbd1);padding-left:12px}
+.idea-heading{margin:0;font:700 16px/1.4 Arial,sans-serif;color:var(--accent,#7a3b4e)}
+.idea-quote{margin:0;padding:6px 10px;border-radius:6px;background:#f6f1ea;font-style:italic;line-height:1.55;overflow-wrap:anywhere}
+.idea-tap{display:grid;gap:2px;width:100%;margin:0;text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line,#e2dbd1);border-radius:8px;padding:7px 12px;font:15px/1.5 Arial,sans-serif;overflow-wrap:anywhere}
+button.idea-tap{cursor:pointer}button.idea-tap:hover{background:#fcfaf6}
+.idea-frame{border-style:dashed;font-weight:600}.idea-heading-zh{border:0;padding:0 0 2px;background:none}
+.idea-tap .hidden-text{filter:blur(5px);user-select:none;transition:filter .12s}.idea-tap[aria-expanded=true] .hidden-text{filter:none;user-select:text}
+.idea-tap .zh{font:15px/1.5 "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--muted)}
+.idea-step-head{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}.idea-step-head b{color:var(--accent,#7a3b4e)}.idea-words,.idea-label{color:var(--muted);font-size:13px}
+.idea-help .word-row{padding:7px 12px}.idea-help>.small-button{margin:0 14px 12px}
+@media(max-width:560px){.idea-groups{padding:4px 8px 10px}.idea-group{padding-left:8px}.idea-help>.small-button{margin:0 8px 12px}}
+@media print{.idea-tap .hidden-text{filter:none}.idea-help>.small-button{display:none}}
 /* Print layout (2026-10-24): a numbered passage prints one source line per printed line (homework.js measures it
    before printing), table words stay whole, a question stays with its writing space, and a passage breaks between lines. */
 .print-lines-measure>*{white-space:nowrap!important;font-size:var(--print-measure-size,12px)!important}

@@ -80,6 +80,27 @@
     const req=requirement(it).replace(/[()]/g,'').trim();if(req)line.append(el('span',req,'sum-req'));line.append(el('span','✓','sum-done'));d.firstChild.replaceChildren(line);return d;}
   // "Which line or lines support your answer to question N?" (id <question>L) sits inside question N's card, not in a fold of its own.
   let evidenceOf={};
+  // Writing ideas (2026-11-17): a fold inside the writing card, above the box. English stays readable; each Chinese line and
+  // each technique name starts blurred and shows when tapped, in place, so nothing moves. Print shows everything.
+  function ideasSection(it){const I=it.ideas;if(!I||!(I.groups||[]).length)return null;
+    const d=toggleSection(I.title||'Ideas and key words',it.id+'-ideas','task-section idea-help'),box=el('div',null,'idea-groups');
+    const zh=t=>{const z=el('span',t,'zh');z.lang='zh';return z;};
+    const hidden=t=>{const m=el('span',null,'hidden-text');m.append(zh(t));return m;};
+    const tap=cls=>{const b=el('button',null,cls);b.type='button';b.setAttribute('aria-expanded','false');b.addEventListener('click',()=>b.setAttribute('aria-expanded',String(b.getAttribute('aria-expanded')!=='true')));return b;};
+    I.groups.forEach(g=>{const sec=el('section',null,'idea-group');sec.append(el('h3',g.heading,'idea-heading'));
+      if(g.zh){const b=tap('idea-tap idea-heading-zh');b.append(hidden(g.zh));sec.append(b);}
+      (g.rows||[]).forEach(r=>{let row;
+        if(r.kind==='quote')row=el('p',r.text,'idea-quote');
+        else if(r.kind==='word'||r.kind==='tech'){row=tap('word-row idea-'+r.kind);const t=el('span',null,'term'),m=el('span',null,'meaning');
+          if(r.kind==='tech'){t.append(el('span','Technique','idea-label'));m.append(el('b',r.term));}else t.append(el('b',r.term));
+          if(r.zh)m.append(zh(r.zh));if(r.text)m.append(el('span',r.text,'gloss'));row.append(t,m);}
+        else{row=r.zh?tap('idea-tap idea-'+r.kind):el('p',null,'idea-tap idea-'+r.kind);
+          if(r.kind==='step'){const h=el('span',null,'idea-step-head');h.append(el('b',r.term));if(r.words)h.append(el('span',r.words+' words','idea-words'));row.append(h);}
+          row.append(el('span',r.text,'idea-en'));if(r.zh)row.append(hidden(r.zh));}
+        sec.append(row);});
+      box.append(sec);});
+    const all=el('button','Show all meanings','small-button');all.type='button';all.addEventListener('click',()=>{const rows=[...box.querySelectorAll('[aria-expanded]')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
+    d.append(box,all);return d;}
   function evidenceParent(it){const m=/^(.+-Q\d+)L$/.exec(it.id),parent=m&&itemById(m[1]);return it.type==='short'&&parent&&parent.type==='choice'?parent:null;}
   function renderAssignment(){
     head.replaceChildren();form.replaceChildren();readPane.replaceChildren();questionTop.replaceChildren();Object.keys(editors).forEach(k=>delete editors[k]);evidenceOf={};
@@ -117,7 +138,7 @@
         const parts=it.template.split('___');parts.forEach((part,i)=>{p.append(document.createTextNode(part));if(i<parts.length-1){const input=el('input');input.type='text';input.className='gap';input.dataset.gap=String(i);input.autocomplete='off';input.autocapitalize='off';input.setAttribute('aria-label','Gap '+(i+1));p.append(input);}});
         fs.append(p);art.append(fs);if(it.hint)art.append(el('p',it.hint,'muted'));
       }else if(it.type==='text'){
-        art.append(el('p',it.label+requirement(it),'item-label'));
+        art.append(el('p',it.label+requirement(it),'item-label'));const ideas=ideasSection(it);if(ideas)art.append(ideas);
         const box=el('div',null,'rich');editors[it.id]=RT.editor(box,{placeholder:it.placeholder||'',itemId:it.id,onInput:()=>changed(1500)});art.append(box);
         editors[it.id].area.setAttribute('aria-label',it.label);if(it.required)editors[it.id].area.setAttribute('aria-required','true');
         if(it.hint)art.append(el('p',it.hint,'muted'));const c=el('p','','counts');c.id=it.id+'-count';c.dataset.countFor=it.id;art.append(c);
