@@ -86,7 +86,7 @@
     const d=toggleSection(I.title||'Ideas and key words',it.id+'-ideas','task-section idea-help'),box=el('div',null,'idea-groups');
     const zh=t=>{const z=el('span',t,'zh');z.lang='zh';return z;};
     const hidden=t=>{const m=el('span',null,'hidden-text');m.append(zh(t));return m;};
-    const tap=cls=>{const b=el('button',null,cls);b.type='button';b.setAttribute('aria-expanded','false');b.addEventListener('click',()=>b.setAttribute('aria-expanded',String(b.getAttribute('aria-expanded')!=='true')));return b;};
+    const tap=cls=>{const b=el('button',null,cls);b.type='button';b.dataset.help='';b.setAttribute('aria-expanded','false');b.addEventListener('click',()=>b.setAttribute('aria-expanded',String(b.getAttribute('aria-expanded')!=='true')));return b;};
     I.groups.forEach(g=>{const sec=el('section',null,'idea-group');sec.append(el('h3',g.heading,'idea-heading'));
       if(g.zh){const b=tap('idea-tap idea-heading-zh');b.append(hidden(g.zh));sec.append(b);}
       (g.rows||[]).forEach(r=>{let row;
@@ -99,7 +99,7 @@
           row.append(el('span',r.text,'idea-en'));if(r.zh)row.append(hidden(r.zh));}
         sec.append(row);});
       box.append(sec);});
-    const all=el('button','Show all meanings','small-button');all.type='button';all.addEventListener('click',()=>{const rows=[...box.querySelectorAll('[aria-expanded]')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
+    const all=el('button','Show all meanings','small-button');all.type='button';all.dataset.help='';all.addEventListener('click',()=>{const rows=[...box.querySelectorAll('[aria-expanded]')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
     d.append(box,all);return d;}
   function evidenceParent(it){const m=/^(.+-Q\d+)L$/.exec(it.id),parent=m&&itemById(m[1]);return it.type==='short'&&parent&&parent.type==='choice'?parent:null;}
   function renderAssignment(){
@@ -115,9 +115,9 @@
     // Word help (2026-10-22): a fixed two-column list. Each meaning is already in place but blurred; tapping a word reveals it
     // without moving anything else (the first version expanded chips and reflowed the list).
     if(a.wordHelp&&a.wordHelp.length){const wrap=toggleSection('Word help · '+a.wordHelp.length+' words · tap a word to see its meaning','word-help','task-section word-help');const list=el('div',null,'word-list');
-      a.wordHelp.forEach(w=>{const row=el('button',null,'word-row');row.type='button';row.setAttribute('aria-expanded','false');const t=el('span',null,'term');t.append(el('b',w.term));if(w.line)t.append(el('span',' · line '+w.line,'line'));const m=el('span',null,'meaning');const zh=el('span',w.meaning_zh,'zh');zh.lang='zh';m.append(zh);if(w.gloss_en)m.append(el('span',w.gloss_en,'gloss'));row.append(t,m);
+      a.wordHelp.forEach(w=>{const row=el('button',null,'word-row');row.type='button';row.dataset.help='';row.setAttribute('aria-expanded','false');const t=el('span',null,'term');t.append(el('b',w.term));if(w.line)t.append(el('span',' · line '+w.line,'line'));const m=el('span',null,'meaning');const zh=el('span',w.meaning_zh,'zh');zh.lang='zh';m.append(zh);if(w.gloss_en)m.append(el('span',w.gloss_en,'gloss'));row.append(t,m);
         row.addEventListener('click',()=>{const on=row.getAttribute('aria-expanded')!=='true';row.setAttribute('aria-expanded',String(on));});list.append(row);});
-      const all=el('button','Show all meanings','small-button');all.type='button';all.addEventListener('click',()=>{const rows=[...list.querySelectorAll('.word-row')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
+      const all=el('button','Show all meanings','small-button');all.type='button';all.dataset.help='';all.addEventListener('click',()=>{const rows=[...list.querySelectorAll('.word-row')],open=rows.some(r=>r.getAttribute('aria-expanded')!=='true');rows.forEach(r=>r.setAttribute('aria-expanded',String(open)));all.textContent=open?'Hide all meanings':'Show all meanings';});
       wrap.append(list,all);(reading?readPane:form).append(wrap);}
     let setHeading='';const cards={};
     a.items.forEach(it=>{
@@ -178,7 +178,8 @@
   });updateCounts();}
   function persist(){hasDeviceWork=true;const value={responses:responses(),startedAt,attempt,savedAt:new Date().toISOString()};try{localStorage.setItem(storageKey,JSON.stringify(value));hasLocalDraft=true;localMeta=value;localSaved=true;return true;}catch(_){localSaved=false;say('Your work could not be saved on this device. Download a copy before leaving.');return false;}}
   function loadLocal(){try{const x=JSON.parse(localStorage.getItem(storageKey)||'null');if(x){hasLocalDraft=true;hasDeviceWork=true;localMeta=x;startedAt=x.startedAt||startedAt;return x.responses||{};}}catch(_){localSaved=false;say('A previous draft could not be loaded. Keep this page open and contact your teacher.');}return {};}
-  function freeze(value){form.querySelectorAll('input,textarea,button').forEach(x=>{x.disabled=value;});Object.values(editors).forEach(ed=>ed.setDisabled(value));submit.disabled=value;}
+  // Help buttons (word help, writing ideas: data-help) stay usable when the work is submitted or not receiving (2026-11-17).
+  function freeze(value){form.querySelectorAll('input,textarea,button:not([data-help])').forEach(x=>{x.disabled=value;});Object.values(editors).forEach(ed=>ed.setDisabled(value));submit.disabled=value;}
   function missing(){const r=responses();return a.items.filter(it=>it.required&&!(it.requiredUnless&&r[it.requiredUnless]!=null)&&r[it.id]==null);}
 
   /* ---------- submitted state, auto-scored answers and feedback ---------- */
